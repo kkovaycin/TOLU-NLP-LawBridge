@@ -1,0 +1,185 @@
+@import url('global.css');
+
+/* 
+ HERO SECTION (Ana Giriş Alanı)
+*/
+.dark-hero {
+  background-image: url('../assets/images/img11.jpeg');
+  background-size: cover;
+  background-position: center;
+  height: 800px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  color: #fff;
+  overflow: hidden;
+  position: relative;
+}
+
+.overlay-text {
+  padding: 2rem 3rem;
+  max-width: 600px;
+  z-index: 2;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.overlay-text h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  color: #fff;
+}
+
+.overlay-text p {
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+  color: #eee;
+}
+
+/* Cta button zaten global.css'te tanımlı, sadece özelleştiriyoruz */
+.cta-button {
+  background-color: #222;
+  border: 1px solid #fff;
+}
+
+.cta-button:hover {
+  background-color: #F8EEDF;
+  color: #000;
+}
+
+
+/* 
+ ABOUT SECTION
+    */
+.about {
+  background-color: #f5f0e6;
+  width: 100%;
+  /* 100vw yerine daha sağlıklı */
+  min-height: 650px;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 0 2rem;
+  box-sizing: border-box;
+}
+
+.about-image {
+  flex: 1;
+  max-width: 500px;
+  height: 98%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.about-image img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin: 1.5rem;
+}
+
+.about-text {
+  flex: 2;
+  padding-left: 2rem;
+  font-size: 1.1rem;
+  color: #444;
+  line-height: 1.7;
+}
+
+.about-text h2 {
+  font-size: 2rem;
+  margin: 2rem;
+  color: #333;
+}
+
+.about-text p {
+  margin: 2rem;
+}
+
+
+/* 
+ TEAM MESSAGE SECTION
+ */
+.team-message {
+  background-color: #1E201E;
+  color: #f5f5f5;
+  padding: 3rem 2rem;
+  text-align: center;
+  line-height: 1.7;
+}
+
+.team-message h2 {
+  font-size: 1.8rem;
+  margin-bottom: 1.5rem;
+  color: var(--highlight-color);
+}
+
+.team-message p {
+  max-width: 700px;
+  margin: 0 auto;
+  font-size: 1.1rem;
+  color: #e0e0e0;
+}
+
+/* Araya çizgi */
+.simple-line {
+  width: 450px;
+  height: 1px;
+  background-color: var(--highlight-color);
+  margin: 1rem auto 2rem;
+}
+
+
+/* 
+ RESPONSIVE TASARIM
+ */
+@media (max-width: 768px) {
+
+  /* HERO */
+  .dark-hero {
+    height: 300px;
+    justify-content: center;
+    text-align: center;
+    padding: 1rem;
+  }
+
+  .overlay-text {
+    padding: 1rem;
+  }
+
+  .overlay-text h1 {
+    font-size: 2rem;
+  }
+
+  .overlay-text p {
+    font-size: 0.95rem;
+  }
+
+  .cta-button {
+    padding: 0.7rem 1.4rem;
+    font-size: 0.95rem;
+  }
+
+  /* ABOUT */
+  .about {
+    flex-direction: column;
+    min-height: auto;
+    padding: 2rem 1rem;
+    text-align: center;
+  }
+
+  .about-image {
+    max-width: 80%;
+    height: auto;
+    margin-bottom: 1.5rem;
+    justify-content: center;
+  }
+
+  .about-text {
+    flex: none;
+    padding-left: 0;
+    width: 100%;
+  }
+}
