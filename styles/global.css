@@ -1,0 +1,148 @@
+/*
+   GLOBAL THEME & COLORS
+ */
+:root {
+    /* Genel metin renkleri */
+    --text-primary: #373A40;
+    --text-secondary: #333;
+    --background-white: #FBFBFB;
+
+    /* Tema Renk Paleti */
+    --accent-color: #F2BED1;
+    --highlight-color: #FFF085;
+
+    /* Header */
+    --header-bg: #F6F5F2;
+    --header-text: var(--text-primary);
+
+    /* Footer */
+    --footer-bg: #F6F5F2;
+    --footer-text: var(--text-secondary);
+
+    /* Button */
+    --button-bg: #000;
+    --button-text: #fff;
+    --button-hover-bg: #333;
+}
+
+/* 
+   RESET ve TEMEL AYARLAR
+ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+    font-family: 'Segoe UI', sans-serif;
+    background-color: var(--background-white);
+    color: var(--text-primary);
+    overflow-x: hidden;
+}
+
+/* Başlıklar ve metin fontları */
+h1,
+h2,
+h3,
+a {
+    font-family: "Sansation", sans-serif;
+    font-weight: 400;
+}
+
+p {
+    font-family: "Roboto", sans-serif;
+}
+
+/* 
+   LINK STİLLERİ
+ */
+a {
+    text-decoration: none;
+    color: inherit;
+    transition: opacity 0.3s;
+}
+
+a:hover {
+    opacity: 0.8;
+}
+
+/* 
+    BUTONLAR
+ */
+button,
+.cta-button {
+    padding: 0.8rem 1.5rem;
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover,
+.cta-button:hover {
+    background-color: var(--button-hover-bg);
+}
+
+/* 
+ HEADER (Sabit Üst Menü)
+ */
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background-color: var(--header-bg);
+    color: var(--header-text);
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ddd;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.brand-name {
+    font-size: 26px;
+    color: var(--text-primary);
+}
+
+.nav a {
+    margin-left: 1.5rem;
+    font-weight: 500;
+}
+
+/* 
+ FOOTER (Sayfa Altı)
+ */
+.footer {
+    background-color: var(--footer-bg);
+    color: var(--footer-text);
+    padding: 2rem 1rem;
+    text-align: center;
+    font-size: 1rem;
+    font-family: 'Roboto', sans-serif;
+}
+
+.footer a {
+    color: var(--footer-text);
+    text-decoration: none;
+    margin: 0 0.3rem;
+    font-weight: 400;
+}
+
+.footer a:hover {
+    text-decoration: underline;
+}
+
+.footer .dot {
+    font-size: 1.5rem;
+    padding: 0 0.5rem;
+    font-weight: bold;
+    vertical-align: middle;
+    color: var(--footer-text);
+}
