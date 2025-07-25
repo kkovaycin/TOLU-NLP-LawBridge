@@ -1,0 +1,128 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: 'Roboto', sans-serif;
+    background-color: var(--header-bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 1rem;
+}
+
+.container {
+    width: 100%;
+    max-width: 1000px;
+    min-height: 70vh;
+    display: flex;
+    background-color: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(132, 44, 44, 0.1);
+    position: relative;
+    flex-direction: row;
+}
+
+.left {
+    flex: 1;
+    padding: 3rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    z-index: 2;
+}
+
+.left h2 {
+    font-family: 'Sansation', sans-serif;
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    color: #111;
+}
+
+.left p {
+    font-size: 1rem;
+    margin-bottom: 2rem;
+    color: #666;
+}
+
+.left input {
+    padding: 0.8rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    font-size: 1rem;
+}
+
+.left button {
+    padding: 0.9rem;
+    border: none;
+    background-color: rgba(30, 23, 23, 0.25);
+    color: white;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 1.5rem;
+    font-size: 1rem;
+}
+
+.left a {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    text-decoration: none;
+    margin-top: 0.6rem;
+}
+
+.left a:hover {
+    opacity: 0.8;
+}
+
+.right {
+    flex: 1;
+    background-image: url('../assets/images/justice_lady.jpeg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+    position: relative;
+    overflow: visible;
+}
+
+/* RESPONSIVE */
+@media (max-width: 600px) {
+    .container {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 1rem;
+    }
+
+    .left {
+        padding: 2rem 1.5rem;
+        width: 100%;
+    }
+
+    .left h2 {
+        font-size: 1.6rem;
+    }
+
+    .left p {
+        font-size: 0.9rem;
+    }
+
+    .left input,
+    .left button {
+        font-size: 1rem;
+        width: 100%;
+    }
+
+    .right {
+        display: none !important;
+    }
+}
