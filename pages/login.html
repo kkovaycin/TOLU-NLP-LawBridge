@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="../styles/global.css">
     <link rel="stylesheet" href="../styles/login.css">
 </head>
+
 <body>
 
     <div class="container">
@@ -19,9 +20,11 @@
             <input type="email" id="email" placeholder="E-posta">
             <input type="password" id="password" placeholder="Şifre">
             <button onclick="login()">Giriş Yap</button>
-            
-            <a href="register.html" >Hesabınız yok mu? <strong> Kayıt olun </strong> </a>
-            <a href="../index.html"> Misafir olarak devam et</a>
+
+            <a href="register.html" onclick="localStorage.setItem('registerSource', 'login')">Hesabınız yok mu? <strong>
+                    Kayıt olun </strong> </a>
+            <a href="guest-options.html"> Misafir olarak devam et</a>
+
         </div>
 
         <!-- SAĞ TARAF -->
@@ -39,11 +42,15 @@
             if (user && user.password === password) {
                 localStorage.setItem("username", user.name);
                 localStorage.setItem("isLoggedIn", "true");
-                window.location.href = "mode-select.html";
+
+                // ✅ Her zaman bağlama ekranına gönder
+                window.location.href = "connect-account.html";
             } else {
                 alert("E-posta veya şifre hatalı.");
             }
         }
+
+
     </script>
 
 </body>
