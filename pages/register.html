@@ -37,18 +37,19 @@
             const password = document.getElementById("password").value;
 
             if (name && email && password) {
-                const user = {
-                    name,
-                    email,
-                    password
-                };
+                const user = { name, email, password };
                 localStorage.setItem("user_" + email, JSON.stringify(user));
-                alert("Kayıt başarılı! Şimdi giriş yapabilirsiniz.");
-                window.location.href = "login.html";
+                localStorage.setItem("username", name);
+                localStorage.setItem("isLoggedIn", "true");
+
+                // ✅ Her zaman bağlama ekranına yönlendir
+                window.location.href = "connect-account.html";
             } else {
                 alert("Lütfen tüm alanları doldurun.");
             }
         }
+
+
     </script>
 
 </body>
