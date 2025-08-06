@@ -7,6 +7,7 @@
     <title>LawBridge Kayıt</title>
     <link rel="stylesheet" href="../styles/global.css">
     <link rel="stylesheet" href="../styles/register.css">
+
 </head>
 
 <body>
@@ -20,7 +21,7 @@
             <input type="text" id="name" placeholder="Kullanıcı Adı">
             <input type="email" id="email" placeholder="E-posta">
             <input type="password" id="password" placeholder="Şifre">
-            <button onclick="register()">Kayıt Ol</button>
+            <button id="register-button">Kayıt Ol</button>
 
             <a href="login.html">Zaten hesabınız var mı? <strong> Giriş Yapın </strong></a>
             <a href="../index.html">Misafir olarak devam et</a>
@@ -30,28 +31,7 @@
         <div class="right"></div>
     </div>
 
-    <script>
-        function register() {
-            const name = document.getElementById("name").value.trim();
-            const email = document.getElementById("email").value.trim();
-            const password = document.getElementById("password").value;
-
-            if (name && email && password) {
-                const user = { name, email, password };
-                localStorage.setItem("user_" + email, JSON.stringify(user));
-                localStorage.setItem("username", name);
-                localStorage.setItem("isLoggedIn", "true");
-
-                // ✅ Her zaman bağlama ekranına yönlendir
-                window.location.href = "connect-account.html";
-            } else {
-                alert("Lütfen tüm alanları doldurun.");
-            }
-        }
-
-
-    </script>
-
+     <script src="../scripts/register.js"></script>
 </body>
 
 </html>
