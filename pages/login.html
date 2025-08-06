@@ -7,6 +7,7 @@
     <title>LawBridge Giriş</title>
     <link rel="stylesheet" href="../styles/global.css">
     <link rel="stylesheet" href="../styles/login.css">
+
 </head>
 
 <body>
@@ -19,7 +20,7 @@
 
             <input type="email" id="email" placeholder="E-posta">
             <input type="password" id="password" placeholder="Şifre">
-            <button onclick="login()">Giriş Yap</button>
+            <button id="login-button">Giriş Yap</button>
 
             <a href="register.html" onclick="localStorage.setItem('registerSource', 'login')">Hesabınız yok mu? <strong>
                     Kayıt olun </strong> </a>
@@ -33,26 +34,7 @@
         </div>
     </div>
 
-    <script>
-        function login() {
-            const email = document.getElementById("email").value.trim();
-            const password = document.getElementById("password").value;
-
-            const user = JSON.parse(localStorage.getItem("user_" + email));
-            if (user && user.password === password) {
-                localStorage.setItem("username", user.name);
-                localStorage.setItem("isLoggedIn", "true");
-
-                // ✅ Her zaman bağlama ekranına gönder
-                window.location.href = "connect-account.html";
-            } else {
-                alert("E-posta veya şifre hatalı.");
-            }
-        }
-
-
-    </script>
-
+    <script src="../scripts/login.js"></script>
 </body>
 
 </html>
