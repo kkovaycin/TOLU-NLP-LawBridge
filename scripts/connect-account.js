@@ -17,29 +17,50 @@ document.addEventListener("DOMContentLoaded", function () {
             if (!res.ok) {
                 if (res.status === 404) {
                     console.warn("Henüz tercih oluşturulmamış kullanıcı");
-                    return {};  // boş obje gönder → alttaki .then(data => ...) kısmı patlamasın
+                    return {};  // boş obje döndür
                 }
                 throw new Error("Kullanıcı bilgileri alınamadı");
             }
-
+            return res.json();
         })
         .then(data => {
+            if (!data || !data.mode) {
+                console.log("Tercih verisi bulunamadı veya eksik.");
+                return;
+            }
+
             if (data.mode === "duzenli") {
                 document.querySelector("input[value='duzenli']").checked = true;
-                document.getElementById("frequency-options").style.display = "block";
-            } else if (data.mode === "tekil") {
-                document.querySelector("input[value='tekil']").checked = true;
+
+                const frequencyOptions = document.getElementById("frequencyOptions");
+                if (frequencyOptions) {
+                    frequencyOptions.style.display = "block";
+                }
+            } else if (data.mode === "duzensiz") {
+                document.querySelector("input[value='duzensiz']").checked = true;
+
+                const frequencyOptions = document.getElementById("frequencyOptions");
+                if (frequencyOptions) {
+                    frequencyOptions.style.display = "none";
+                }
+            }
+            if (data.frequency) {
+                const frequencyInput = document.querySelector(`input[name="frequency"][value="${data.frequency}"]`);
+                if (frequencyInput) {
+                    frequencyInput.checked = true;
+                }
             }
 
-            if (data.frequency) {
-                document.querySelector(`input[name="frequency"][value="${data.frequency}"]`).checked = true;
-            }
 
             if (data.platform) {
-                document.getElementById("platform").value = data.platform;
+                const platformSelect = document.getElementById("platform");
+                if (platformSelect) {
+                    platformSelect.value = data.platform; // örn: 'instagram'
+                }
             }
-
+            console.log("🎯 Kullanıcı tercihleri:", data);
         })
+
         .catch(error => {
             console.warn("Tercih yok veya başka bir hata:", error);
             // Tercih bulunamadıysa, sadece formu boş göster
