@@ -14,10 +14,12 @@
       margin: 2rem auto 1rem;
       padding: 0 1rem;
     }
+
     .results-header h1 {
       font-size: 1.9rem;
       margin-bottom: .3rem;
     }
+
     .results-header p {
       color: #555;
     }
@@ -27,12 +29,15 @@
       display: grid;
       gap: 1.25rem;
       grid-template-columns: repeat(2, 1fr);
-      max-width: 80%;
+      max-width: 1200px;
       margin: 1.5rem auto 3rem;
       padding: 0 1rem;
     }
+
     @media (max-width: 768px) {
-      .results-grid { grid-template-columns: 1fr; }
+      .results-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .result-card {
@@ -42,23 +47,26 @@
       box-shadow: 0 8px 28px rgba(31, 38, 135, .15);
       border: 1px solid rgba(0, 0, 0, .05);
     }
+
     .result-card h3 {
       position: relative;
       text-align: center;
       margin: .25rem 0 1rem;
     }
+
     .toggle-btn {
       position: absolute;
       right: 10px;
       top: 50%;
       transform: translateY(-50%);
       border: none;
-      cursor: pointer;
       background-color: #666;
+      cursor: pointer;
       font-size: 1.2rem;
       line-height: 1;
       padding: 1px;
     }
+
     .chart-img {
       width: 100%;
       height: auto;
@@ -74,14 +82,33 @@
       gap: .5rem;
       align-items: center;
     }
+
     .backbar .btn-outline {
-      border: 1px solid #333;
+      border: 1px solid #666;
       background: transparent;
-      color: #333;
+
+      color: #666;
       padding: .55rem .9rem;
       border-radius: 8px;
       cursor: pointer;
     }
+
+    .dilekce-btn {
+      background-color: #8d9c90 !important;
+      /* Mavi */
+      color: white !important;
+      padding: .4rem .8rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .dilekce-btn:disabled {
+      background-color: #ccc !important;
+      /* Pasifken gri */
+      cursor: not-allowed;
+    }
+
     .kv {
       font-size: .95rem;
       color: #666;
@@ -90,14 +117,58 @@
     .chart-slide {
       transition: transform 0.3s ease, opacity 0.3s ease;
     }
+
     .slide-in {
       transform: translate(2px, -2px);
       opacity: 0.8;
+    }
+
+    #clearFilters {
+      border: 1px solid #05342e !important;
+      /* Yeşil çerçeve */
+      background: transparent !important;
+      color: #1e4327 !important;
+    }
+
+    #clearFilters:hover {
+      background-color: #8d9c90 !important;
+      color: white !important;
+    }
+
+
+
+
+    /* Filtre paneli genişlik */
+    #filter-panel {
+      max-width: 80%;
+      width: clamp(960px, 95vw, 1400px);
+      margin: 0 auto 2rem;
+      padding: 1.5rem;
+    }
+
+    /* Grid düzenini esnek yap */
+    .filter-grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    @media (max-width: 1200px) {
+      .filter-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .filter-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 
 <body>
+  <!-- HEADER -->
 <header class="header">
   <a href="#top" class="brand-name">LawBridge</a>
 
@@ -112,23 +183,75 @@
   <nav class="nav" id="nav">
     <a href="#about">Hakkımızda</a>
     <a href="#team">Ekipten Mesaj</a>
-    <a href="pages/guest-options.html">Analiz Et</a>
-    <a href="pages/login.html" onclick="localStorage.setItem('registerSource', 'menu')">Giriş / Misafir</a>
+    <a href="guest-options.html">Analiz Et</a>
+    <a href="login.html" onclick="localStorage.setItem('registerSource', 'menu')">Giriş / Misafir</a>
 
   </nav>
 </header>
-
   <div class="backbar">
     <button class="btn-outline" onclick="window.location.href='./guest-options.html'">← Yeni Analiz</button>
     <span class="kv" id="meta"></span>
   </div>
 
   <section class="results-header">
-    <h1>Analiz Sonuçları</h1>
+    <h1>Analiz Paneli</h1>
     <p>Yüklenen dosyanın etiket dağılımları aşağıdadır.</p>
   </section>
 
   <section id="results" class="results-grid"></section>
+
+  <!-- FİLTRE & YORUM LİSTESİ -->
+  <section id="filter-panel" class="result-card">
+    <h3 style="text-align:center;margin:.25rem 0 1rem;">Yorum Filtresi</h3>
+
+    <div class="filter-grid">
+      <div>
+        <label style="font-weight:600;display:block;margin-bottom:.35rem;">Duygu</label>
+        <div id="f-sentiment"></div>
+      </div>
+      <div>
+        <label style="font-weight:600;display:block;margin-bottom:.35rem;">Hukuki</label>
+        <div id="f-legal"></div>
+      </div>
+      <div>
+        <label style="font-weight:600;display:block;margin-bottom:.35rem;">Niyet</label>
+        <div id="f-intent"></div>
+      </div>
+      <div>
+        <label style="font-weight:600;display:block;margin-bottom:.35rem;">Niyet Temizliği</label>
+        <div id="f-intent_purity"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:.5rem;align-items:center;margin-top:1rem;">
+      <input id="searchBox" type="text" placeholder="Metinde ara..."
+        style="flex:1;padding:.6rem;border:1px solid #ddd;border-radius:8px;">
+      <button id="clearFilters" class="btn-outline">Filtreleri Sıfırla</button>
+    </div>
+
+    <div style="margin-top:1rem;overflow:auto;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left;border-bottom:1px solid #eee;padding:.5rem;">Metin</th>
+            <th style="text-align:left;border-bottom:1px solid #eee;padding:.5rem;">Duygu</th>
+            <th style="text-align:left;border-bottom:1px solid #eee;padding:.5rem;">Hukuki</th>
+            <th style="text-align:left;border-bottom:1px solid #eee;padding:.5rem;">Niyet</th>
+            <th style="text-align:left;border-bottom:1px solid #eee;padding:.5rem;">Niyet Temizliği</th>
+            <!-- YENİ -->
+            <th style="text-align:left;border-bottom:1px solid #eee;padding:.5rem;">Aksiyon</th>
+          </tr>
+        </thead>
+
+        <tbody id="rowsBody"></tbody>
+      </table>
+      <div id="pager" style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.6rem;">
+        <button id="prevPage" class="btn-outline">Önceki</button>
+        <span id="pageInfo" class="kv"></span>
+        <button id="nextPage" class="btn-outline">Sonraki</button>
+      </div>
+    </div>
+  </section>
 
   <footer class="footer">
     <p>
@@ -142,6 +265,7 @@
     </p>
   </footer>
 
-<script src="../scripts/guest-analysis.js"></script>
+  <script src="../scripts/guest-analysis.js"></script>
 </body>
+
 </html>

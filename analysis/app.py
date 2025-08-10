@@ -11,17 +11,14 @@ from io import BytesIO
 from textwrap import wrap
 import unicodedata, re, json
 
-# --------------------------------------------------
-# Flask
-# --------------------------------------------------
 app = Flask(__name__)
 CORS(app)
 
-TOP_N = 5  # pie/donut grafikte gösterilecek en çok N etiket
+TOP_N = 5
+TEXT_CANDIDATES = ["text", "yorum", "comment", "content", "tweet", "message", "body"]
+LABEL_COLS = ["sentiment", "intent", "legal", "intent_purity"]
+MAX_RECORDS = 2000
 
-# --------------------------------------------------
-# Yardımcılar
-# --------------------------------------------------
 def strip_accents(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
@@ -34,24 +31,20 @@ CHOICES_PREFIX_RE = re.compile(r"(?i)\bchoices\s*[:：﹕꞉︰⦂⸬\-—–]*\
 ZERO_WIDTHS_RE     = re.compile(r"[\u200B-\u200D\uFEFF]")
 
 def preclean_cell(text: str) -> str:
-    """Genel sadeleştirme — köşeli parantez içini artık silmiyoruz!"""
     t = ZERO_WIDTHS_RE.sub("", str(text))
-    # t = re.sub(r"\[[^\]]*\]", "", t)  # <-- KALDIRILDI: choices listelerini silmemeliyiz
-    t = CHOICES_PREFIX_RE.sub("", t)                  # 'choices:' önekini temizle
-    t = re.sub(r"m\.?\s*105\s*,\s*123", "m.105 123", t, flags=re.I)
-    t = re.sub(r"[;|]+", ",", t)                      # ; ve | -> ,
-    t = re.sub(r",\s*,", ",", t)                      # çift virgül sadeleştirme
+    t = CHOICES_PREFIX_RE.sub("", t)
+    # Genel: m.X, Y → m.X Y (Ayıplı Mal/Hizmet – TKHK m.8, 11 vb.)
+    t = re.sub(r"(?i)\bm\.?\s*(\d+)\s*,\s*(\d+)\b", r"m.\1 \2", t)
+    t = re.sub(r"[;|]+", ",", t)
+    t = re.sub(r",\s*,", ",", t)
     return t
 
 def _expand_cell(text: str) -> list[str]:
-    """Hücreyi birden çok etikete aç: JSON, 'choices: [...]' ya da düz metin."""
     if text is None:
         return []
     raw = str(text).strip()
     if raw == "" or raw.lower() in {"nan", "none"}:
         return []
-
-    # 1) JSON dene
     try:
         obj = json.loads(raw)
         if isinstance(obj, dict) and "choices" in obj and isinstance(obj["choices"], list):
@@ -59,25 +52,17 @@ def _expand_cell(text: str) -> list[str]:
         if isinstance(obj, list):
             return [str(x) for x in obj]
         if isinstance(obj, str):
-            raw = obj  # stringse düz metin olarak devam
+            raw = obj
     except Exception:
         pass
-
-    # 2) 'choices: [ ... ]' biçimi
     m = re.search(r'choices\s*:\s*\[([^\]]+)\]', raw, flags=re.I)
     if m:
         inner = m.group(1)
-        items = [s.strip().strip('\'"') for s in inner.split(",") if s.strip()]
-        return items
-
-    # 3) '[ ... ]' tek başına
+        return [s.strip().strip('\'"') for s in inner.split(",") if s.strip()]
     m2 = re.search(r'\[([^\]]+)\]', raw)
     if m2:
         inner = m2.group(1)
-        items = [s.strip().strip('\'"') for s in inner.split(",") if s.strip()]
-        return items
-
-    # 4) fallback: virgülle böl
+        return [s.strip().strip('\'"') for s in inner.split(",") if s.strip()]
     t = preclean_cell(raw)
     return [p.strip() for p in t.split(",") if p.strip()]
 
@@ -90,7 +75,7 @@ def explode_multilabel(series: pd.Series) -> pd.Series:
     s = s[(s != "") & s.str.contains(r"[A-Za-z0-9ÇŞĞÜÖİçşğüöı]", regex=True)]
     return s
 
-# ---- Etiket sözlükleri ----
+# Canonical sözlükler
 SENTIMENT_CANON = {
     "Öfke/Kızgınlık": ["Öfke / Kızgınlık","Öfke","Kızgınlık"],
     "Üzüntü/Keder": ["Üzüntü / Keder","Üzüntü","Keder"],
@@ -128,7 +113,12 @@ LEGAL_CANON = {
     ],
     "Toplumu Kin ve Düşmanlığa Tahrik – TCK m.216": ["Toplumu Kin ve Düşmanlığa Tahrik – TCK m.216","TCK m.216"],
     "Veri İhlali – KVKK m.12, TCK m.136": ["Veri İhlali – KVKK m.12, TCK m.136","KVKK m.12","TCK m.136","Veri İhlali"],
-    "Ayıplı Mal/Hizmet – TKHK m.8, 11": ["Ayıplı Mal / Hizmet – TKHK m.8, 11","Ayıplı Mal/Hizmet – TKHK m.8, 11","Ayıplı Mal","Ayıplı Hizmet"],
+    "Ayıplı Mal/Hizmet – TKHK m.8, 11": [
+        "Ayıplı Mal / Hizmet – TKHK m.8, 11","Ayıplı Mal/Hizmet – TKHK m.8, 11",
+        "Ayıplı Mal / Hizmet – TKHK m.8 11","Ayıplı Mal/Hizmet – TKHK m.8 11",
+        "Ayıplı Mal / Hizmet – TKHK m.8 ve 11","Ayıplı Mal/Hizmet – TKHK m.8 ve 11",
+        "Ayıplı Mal","Ayıplı Hizmet"
+    ],
     "Dolandırıcılık/Sahte Kampanya – TCK m.157": ["Dolandırıcılık / Sahte Kampanya – TCK m.157","TCK m.157","Dolandırıcılık","Sahte Kampanya"],
     "Kamu Görevlisine Hakaret – TCK m.125/3": ["Kamu Görevlisine Hakaret – TCK m.125/3","TCK m.125/3"],
     "Uygunsuzluk Yok": ["Uygunsuzluk Yok","Uygunsuzluk yok","None","Yok"]
@@ -162,9 +152,6 @@ def canonicalize(token: str, dimension: str) -> str:
     k = re.sub(r"^(choices|intent|sentiment|legal|faith|purity)\s*", "", k)
     return ALIAS.get(dimension, {}).get(k, t)
 
-# --------------------------------------------------
-# Görsel yardımcıları (Base64 PNG)
-# --------------------------------------------------
 def _bar_chart_base64(counts: pd.Series, title: str) -> str | None:
     if counts is None or counts.empty:
         return None
@@ -209,12 +196,10 @@ def _donut_topn_base64(counts: pd.Series, title: str, n: int = TOP_N, exclude=No
         counts = counts.drop([x for x in exclude if x in counts.index], errors="ignore")
     if counts.empty:
         return None
-
     counts = counts.sort_values(ascending=False)
     top = counts.head(n).copy()
     if len(counts) > n:
         top.loc["Diğer"] = counts.iloc[n:].sum()
-
     fig, ax = plt.subplots(figsize=(8,6))
     wedges, _texts, autotexts = ax.pie(
         top.values, labels=None, autopct='%1.1f%%', startangle=140,
@@ -222,11 +207,9 @@ def _donut_topn_base64(counts: pd.Series, title: str, n: int = TOP_N, exclude=No
     )
     ax.set_title(f"{title} – En Çok {min(n, len(counts))} Etiket (+Diğer)")
     ax.axis('equal')
-
     legend_labels = [f"{name} ({int(val)})" for name, val in zip(top.index, top.values)]
     ax.legend(wedges, legend_labels, loc="center left", bbox_to_anchor=(1, 0.5),
               frameon=False, title="Etiketler")
-
     buf = BytesIO()
     plt.tight_layout()
     plt.savefig(buf, format="png", dpi=150, bbox_inches="tight")
@@ -244,36 +227,25 @@ def summarize_dimension(df: pd.DataFrame, col: str, pretty: str):
     canon = canon[(canon.notna()) & (canon != "")]
     if canon.empty:
         return {"counts": {}, "bar_chart": None, "pie_chart": None}
-
     counts = canon.value_counts().sort_values(ascending=False)
     bar64 = _bar_chart_base64(counts, f"{pretty} Dağılımı")
-
     if col in ("intent", "intent_purity"):
         pie64 = _donut_topn_base64(counts, pretty, n=TOP_N)
     elif col == "legal":
         pie64 = _topn_pie_base64(counts, pretty, n=TOP_N, exclude={"Uygunsuzluk Yok"})
     else:
         pie64 = _topn_pie_base64(counts, pretty, n=TOP_N)
-
     return {"counts": counts.to_dict(), "bar_chart": bar64, "pie_chart": pie64}
 
-# --------------------------------------------------
-# API
-# --------------------------------------------------
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"ok": True})
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    """
-    form-data → key: 'file' (CSV)
-    Dönen JSON → { sentiment:{counts,bar_chart,pie_chart}, intent:{...}, legal:{...}, intent_purity:{...} }
-    """
     f = request.files.get("file")
     if not f:
         return jsonify({"error": "Dosya yüklenmedi (form-data 'file' bekleniyor)."}), 400
-
     try:
         df = pd.read_csv(f, encoding="utf-8-sig")
     except UnicodeDecodeError:
@@ -296,8 +268,38 @@ def analyze():
     if not results:
         return jsonify({"error": "Beklenen kolonlar bulunamadı: sentiment, intent, legal, intent_purity"}), 422
 
-    return jsonify(results)
+    # --- canonical records ---
+    text_col = next((c for c in TEXT_CANDIDATES if c in df.columns), None)
+    present_label_cols = [c for c in LABEL_COLS if c in df.columns]
+    records = []
+    if text_col:
+        cols = [text_col] + present_label_cols
+        slim = df[cols].head(MAX_RECORDS).copy()
+        for c in cols:
+            if c == text_col:
+                slim[c] = slim[c].astype(str)
+            else:
+                slim[c] = slim[c].apply(
+                    lambda val: json.dumps({
+                        "choices": [
+                            canonicalize(x, c)
+                            for x in _expand_cell(val)
+                            if canonicalize(x, c)
+                        ]
+                    }, ensure_ascii=False)
+                )
+        records = slim.to_dict(orient="records")
 
-# --------------------------------------------------
+    meta = {
+        "text_col": text_col,
+        "label_cols": present_label_cols,
+        "total_rows": int(len(df))
+    }
+
+    payload = dict(results)
+    payload["records"] = records
+    payload["meta"] = meta
+    return jsonify(payload)
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
