@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Analiz Sonuçları - LawBridge</title>
+
+  <link rel="stylesheet" href="../styles/global.css" />
+  <link rel="stylesheet" href="../styles/guest.css" />
+  <style>
+    .results-header {
+      text-align: center;
+      margin: 2rem auto 1rem;
+      padding: 0 1rem;
+    }
+    .results-header h1 {
+      font-size: 1.9rem;
+      margin-bottom: .3rem;
+    }
+    .results-header p {
+      color: #555;
+    }
+
+    /* 2x2 grid */
+    .results-grid {
+      display: grid;
+      gap: 1.25rem;
+      grid-template-columns: repeat(2, 1fr);
+      max-width: 80%;
+      margin: 1.5rem auto 3rem;
+      padding: 0 1rem;
+    }
+    @media (max-width: 768px) {
+      .results-grid { grid-template-columns: 1fr; }
+    }
+
+    .result-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 1rem 1rem 1.25rem;
+      box-shadow: 0 8px 28px rgba(31, 38, 135, .15);
+      border: 1px solid rgba(0, 0, 0, .05);
+    }
+    .result-card h3 {
+      position: relative;
+      text-align: center;
+      margin: .25rem 0 1rem;
+    }
+    .toggle-btn {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: none;
+      cursor: pointer;
+      background-color: #666;
+      font-size: 1.2rem;
+      line-height: 1;
+      padding: 1px;
+    }
+    .chart-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .backbar {
+      max-width: 1100px;
+      margin: 1rem auto 0;
+      padding: 0 1rem;
+      display: flex;
+      gap: .5rem;
+      align-items: center;
+    }
+    .backbar .btn-outline {
+      border: 1px solid #333;
+      background: transparent;
+      color: #333;
+      padding: .55rem .9rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .kv {
+      font-size: .95rem;
+      color: #666;
+    }
+
+    .chart-slide {
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    .slide-in {
+      transform: translate(2px, -2px);
+      opacity: 0.8;
+    }
+  </style>
+</head>
+
+<body>
+<header class="header">
+  <a href="#top" class="brand-name">LawBridge</a>
+
+  <!-- Hamburger icon (sadece küçük ekranda görünecek) -->
+  <div class="hamburger" id="hamburger">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+
+  <!-- Navigation links -->
+  <nav class="nav" id="nav">
+    <a href="#about">Hakkımızda</a>
+    <a href="#team">Ekipten Mesaj</a>
+    <a href="pages/guest-options.html">Analiz Et</a>
+    <a href="pages/login.html" onclick="localStorage.setItem('registerSource', 'menu')">Giriş / Misafir</a>
+
+  </nav>
+</header>
+
+  <div class="backbar">
+    <button class="btn-outline" onclick="window.location.href='./guest-options.html'">← Yeni Analiz</button>
+    <span class="kv" id="meta"></span>
+  </div>
+
+  <section class="results-header">
+    <h1>Analiz Sonuçları</h1>
+    <p>Yüklenen dosyanın etiket dağılımları aşağıdadır.</p>
+  </section>
+
+  <section id="results" class="results-grid"></section>
+
+  <footer class="footer">
+    <p>
+      <a href="#">© 2025 LawBridge</a>
+      <span class="dot">·</span>
+      <a href="#">Tüm hakları saklıdır</a>
+      <span class="dot">·</span>
+      <a href="#">Gizlilik Politikası</a>
+      <span class="dot">·</span>
+      <a href="#">İletişim</a>
+    </p>
+  </footer>
+
+<script src="../scripts/guest-analysis.js"></script>
+</body>
+</html>
