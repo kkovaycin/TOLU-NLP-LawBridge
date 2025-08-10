@@ -4,7 +4,6 @@
 
 body {
     margin: 0;
-    font-family: 'Roboto', sans-serif;
     background-color: var(--header-bg);
     display: flex;
     justify-content: center;
@@ -24,6 +23,8 @@ body {
     overflow: hidden;
     box-shadow: 0 20px 50px rgba(132, 44, 44, 0.1);
     position: relative;
+    opacity: 0;
+    animation: fadeInTop 1s ease forwards;
 }
 
 .left {
@@ -33,10 +34,11 @@ body {
     flex-direction: column;
     justify-content: center;
     z-index: 2;
+    opacity: 0;
+    animation: fadeInTop 1s ease 0.3s forwards;
 }
 
 .left h2 {
-    font-family: 'Sansation', sans-serif;
     font-size: 1.8rem;
     margin-bottom: 1rem;
     color: #111;
@@ -54,6 +56,12 @@ body {
     border-radius: 8px;
     border: 1px solid #ddd;
     font-size: 1rem;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.left input:focus {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .left button {
@@ -66,6 +74,12 @@ body {
     cursor: pointer;
     margin-bottom: 1.5rem;
     font-size: 1rem;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.left button:hover {
+    background-color: rgba(30, 23, 23, 0.4);
+    transform: translateY(-2px);
 }
 
 .left a {
@@ -74,6 +88,7 @@ body {
     color: var(--text-primary);
     text-decoration: none;
     margin-top: 0.6rem;
+    transition: opacity 0.3s ease;
 }
 
 .left a:hover {
@@ -93,6 +108,37 @@ body {
     padding: 2rem;
     position: relative;
     overflow: visible;
+    opacity: 0;
+    animation: fadeInUp 1s ease 0.5s forwards;
+}
+
+/* === ANİMASYONLAR === */
+@keyframes fadeInTop {
+    from {
+        transform: translateY(-30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Geç gelen öğeler için */
+.fade-in-late {
+    opacity: 0;
+    animation: fadeInUp 1s ease 1s forwards;
 }
 
 /* Responsive */
