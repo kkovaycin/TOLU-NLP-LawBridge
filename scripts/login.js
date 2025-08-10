@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
     })
     .then(data => {
       localStorage.setItem("token", data.access_token);
-      window.location.href = "connect-account.html";
+      window.location.href = "analysis-dashboard.html";
     })
     .catch(error => {
       console.error("Hata:", error);
