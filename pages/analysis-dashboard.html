@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Analiz Paneli - LawBridge</title>
+  <link rel="stylesheet" href="../styles/analysis-dashboard.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <h1>👩‍⚖️ Analiz Paneli</h1>
+
+  <!-- Genel Özet -->
+  <div id="summary-cards">
+    <div class="card">Toplam Yorum: <span id="total-comments">0</span></div>
+    <div class="card">Analizli Yorum: <span id="analyzed-comments">0</span></div>
+  </div>
+
+  <!-- Pie Chart Alanı -->
+  <div id="charts">
+    <div>
+      <h3>Duygu Etiket Dağılımı</h3>
+      <canvas id="sentimentChart"></canvas>
+    </div>
+    <div>
+      <h3>Niyet Etiket Dağılımı</h3>
+      <canvas id="intentChart"></canvas>
+    </div>
+    <div>
+      <h3>Hukuki Etiket Dağılımı</h3>
+      <canvas id="lawChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Filtreler ve Arama -->
+  <div id="filters">
+    <input type="text" id="searchInput" placeholder="Analiz adı ara...">
+    <select id="filter-mode">
+      <option value="">Mod Seç</option>
+      <option value="duzenli">Düzenli</option>
+      <option value="duzensiz">Düzensiz</option>
+    </select>
+    <select id="filter-frequency">
+      <option value="">Sıklık</option>
+      <option value="daily">Günlük</option>
+      <option value="weekly">Haftalık</option>
+      <option value="monthly">Aylık</option>
+    </select>
+    <button onclick="filterAnalyses()">Filtrele</button>
+  </div>
+
+  <!-- Analiz Geçmiş Tablosu -->
+  <table id="analysisTable">
+    <thead>
+      <tr>
+        <th>İsim</th>
+        <th>Tarih</th>
+        <th>Platform</th>
+        <th>Mod</th>
+        <th>Frekans</th>
+        <th>Toplam Yorum</th>
+        <th>İncele</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- JS ile doldurulacak -->
+    </tbody>
+  </table>
+
+  <script src="../scripts/analysis-dashboard.js"></script>
+</body>
+</html>
