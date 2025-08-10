@@ -22,12 +22,22 @@
 <body>
     <!-- HEADER -->
     <header class="header">
-        <a href="../index.html#top" class="brand-name">LawBridge</a>
-        <nav class="nav">
-            <a href="../index.html#about">Hakkımızda</a>
-            <a href="../index.html#team">Ekipten Mesaj</a>
-            <a href="./guest-options.html">Analiz Et</a>
-            <a href="./login.html">Giriş / Misafir</a>
+        <a href="#top" class="brand-name">LawBridge</a>
+
+        <!-- Hamburger icon (sadece küçük ekranda görünecek) -->
+        <div class="hamburger" id="hamburger">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+
+        <!-- Navigation links -->
+        <nav class="nav" id="nav">
+            <a href="#about">Hakkımızda</a>
+            <a href="#team">Ekipten Mesaj</a>
+            <a href="pages/guest-options.html">Analiz Et</a>
+            <a href="pages/login.html" onclick="localStorage.setItem('registerSource', 'menu')">Giriş / Misafir</a>
+
         </nav>
     </header>
 
