@@ -9,16 +9,96 @@ import matplotlib.pyplot as plt
 import base64
 from io import BytesIO
 from textwrap import wrap
-import unicodedata, re, json
+import unicodedata, re, json, os
 
+# ============================
+# Hugging Face - Lokal model
+# ============================
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+
+HF_TOKEN    = os.getenv("HF_TOKEN", "your_hf_token")   
+MODEL_LEGAL = "lawbridge/lawbridge-legal-model"           
+
+# Model & tokenizer (ilk çalıştırmada indirir, sonra cache'den yükler)
+tokenizer_legal = AutoTokenizer.from_pretrained(MODEL_LEGAL, token=HF_TOKEN)
+model_legal     = AutoModelForSequenceClassification.from_pretrained(MODEL_LEGAL, token=HF_TOKEN)
+clf_legal = pipeline("text-classification", model=model_legal, tokenizer=tokenizer_legal)
+
+def classify_legal_multi(text: str, threshold: float = 0.45, max_labels: int = 5) -> list[str]:
+    """
+    Çoklu etiket: tüm skorları al, 'threshold' üzerindekileri sırayla seç.
+    Hiçbiri geçmezse en yüksek skorlu 1 etiketi döndür.
+    max_labels None ise sınırsız; aksi halde üst sınır uygulanır.
+    """
+    if not text or not str(text).strip():
+        return []
+    try:
+        out = clf_legal(
+            str(text),
+            return_all_scores=True,
+            function_to_apply="sigmoid",
+            top_k=None
+        )
+        # Bazı sürümlerde [[]] sarılı gelebilir:
+        if isinstance(out, list) and out and isinstance(out[0], list):
+            out = out[0]
+        if not isinstance(out, list):
+            return []
+
+        out = sorted(out, key=lambda d: d.get("score", 0.0), reverse=True)
+        picked = [d["label"] for d in out if d.get("score", 0.0) >= threshold]
+        if not picked and out:
+            picked = [out[0]["label"]]  # en iyisini al
+        if max_labels:
+            picked = picked[:max_labels]
+        # Aynı label tekrarlarını temizle
+        return list(dict.fromkeys(picked))
+    except Exception as e:
+        print("[LEGAL MULTI ERROR]", e)
+        return []
+
+# ---------------------------------------
+# Hukukî etiketten diğerlerini türetme
+# ---------------------------------------
+LEGAL_TO_INTENT = {
+    "Hakaret – TCK m.125": "Hakaret/Aşağılama",
+    "Kamu Görevlisine Hakaret – TCK m.125/3": "Hakaret/Aşağılama",
+    "Tehdit – TCK m.106": "Tehdit",
+    "Taciz – TCK m.105, 123": "Taciz",
+    "Nefret/Ayrımcılık – TCK m.122": "Kamuoyu Bilgilendirmesi/Uyarı",
+    "Veri İhlali – KVKK m.12, TCK m.136": "Bilgi/Açıklama Talebi",
+    "Dolandırıcılık/Sahte Kampanya – TCK m.157": "Dolandırıcılık/Sahte Kampanya",
+    "Ayıplı Mal/Hizmet – TKHK m.8, 11": "Şikayet/Memnuniyetsizlik",
+    "Toplumu Kin ve Düşmanlığa Tahrik – TCK m.216": "Kamuoyu Bilgilendirmesi/Uyarı",
+    "Uygunsuzluk Yok": "Kişisel Yorum/Gözlem",
+}
+LEGAL_TO_SENTIMENT = {
+    "Uygunsuzluk Yok": "Nötr",
+}
+LEGAL_TO_PURITY = {
+    "Hakaret – TCK m.125": "bad_faith",
+    "Kamu Görevlisine Hakaret – TCK m.125/3": "bad_faith",
+    "Tehdit – TCK m.106": "bad_faith",
+    "Taciz – TCK m.105, 123": "bad_faith",
+    # Diğerleri belirsiz kabul edilecek
+}
+DEFAULT_SENTIMENT = "Olumsuz"
+DEFAULT_PURITY    = "uncertain"
+
+# --------------------------------------------------------------------
+# Flask
+# --------------------------------------------------------------------
 app = Flask(__name__)
 CORS(app)
 
-TOP_N = 5
+TOP_N = 8  # Donut/Pie grafikte gösterilecek en çok geçen etiket sayısı
 TEXT_CANDIDATES = ["text", "yorum", "comment", "content", "tweet", "message", "body"]
 LABEL_COLS = ["sentiment", "intent", "legal", "intent_purity"]
 MAX_RECORDS = 2000
 
+# -------------------------------
+# Yardımcılar
+# -------------------------------
 def strip_accents(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
@@ -33,7 +113,7 @@ ZERO_WIDTHS_RE     = re.compile(r"[\u200B-\u200D\uFEFF]")
 def preclean_cell(text: str) -> str:
     t = ZERO_WIDTHS_RE.sub("", str(text))
     t = CHOICES_PREFIX_RE.sub("", t)
-    # Genel: m.X, Y → m.X Y (Ayıplı Mal/Hizmet – TKHK m.8, 11 vb.)
+    # m.8, 11 → m.8 11 normalize
     t = re.sub(r"(?i)\bm\.?\s*(\d+)\s*,\s*(\d+)\b", r"m.\1 \2", t)
     t = re.sub(r"[;|]+", ",", t)
     t = re.sub(r",\s*,", ",", t)
@@ -75,7 +155,7 @@ def explode_multilabel(series: pd.Series) -> pd.Series:
     s = s[(s != "") & s.str.contains(r"[A-Za-z0-9ÇŞĞÜÖİçşğüöı]", regex=True)]
     return s
 
-# Canonical sözlükler
+# ---- Kanonik sözlükler ----
 SENTIMENT_CANON = {
     "Öfke/Kızgınlık": ["Öfke / Kızgınlık","Öfke","Kızgınlık"],
     "Üzüntü/Keder": ["Üzüntü / Keder","Üzüntü","Keder"],
@@ -87,7 +167,6 @@ SENTIMENT_CANON = {
     "Olumsuz": ["Olumsuz","Negatif","Negative"],
     "Alay/İroni": ["Alay / İroni","Alay","İroni"]
 }
-
 INTENT_CANON = {
     "Şikayet/Memnuniyetsizlik": ["Şikayet / Memnuniyetsizlik","Şikayet","Memnuniyetsizlik"],
     "Kamuoyu Bilgilendirmesi/Uyarı": ["Kamuoyu Bilgilendirmesi / Uyarı","Kamuoyu Bilgilendirmesi","Uyarı"],
@@ -102,14 +181,14 @@ INTENT_CANON = {
     "Spam/Tanıtım": ["Spam / Tanıtım","Spam","Tanıtım"],
     "Mizah/Alay": ["Mizah / Alay","Mizah","Alay"]
 }
-
 LEGAL_CANON = {
     "Hakaret – TCK m.125": ["Hakaret – TCK m.125","Hakaret TCK m.125","Hakaret-TCK m.125","Hakaret"],
     "Tehdit – TCK m.106": ["Tehdit – TCK m.106","Tehdit TCK m.106","Tehdit-TCK m.106","Tehdit"],
     "Taciz – TCK m.105, 123": ["Taciz – TCK m.105, 123","Taciz – TCK m.105 123","Taciz – TCK m.105","Taciz – TCK m.123","Taciz","m.105 123"],
     "Nefret/Ayrımcılık – TCK m.122": [
         "Nefret / Ayrımcılık – TCK m.122","Nefret/Ayrımcılık – TCK m.122","Nefret Ayrımcılık – TCK m.122",
-        "Nefret – TCK m.122","Ayrımcılık – TCK m.122","TCK m.122","Nefret / Ayrımcılık","Nefret/Ayrımcılık","Nefret Ayrımcılık","Nefret","Ayrımcılık"
+        "Nefret – TCK m.122","Ayrımcılık – TCK m.122","TCK m.122","Nefret / Ayrımcılık","Nefret/Ayrımcılık",
+        "Nefret Ayrımcılık","Nefret","Ayrımcılık"
     ],
     "Toplumu Kin ve Düşmanlığa Tahrik – TCK m.216": ["Toplumu Kin ve Düşmanlığa Tahrik – TCK m.216","TCK m.216"],
     "Veri İhlali – KVKK m.12, TCK m.136": ["Veri İhlali – KVKK m.12, TCK m.136","KVKK m.12","TCK m.136","Veri İhlali"],
@@ -123,7 +202,6 @@ LEGAL_CANON = {
     "Kamu Görevlisine Hakaret – TCK m.125/3": ["Kamu Görevlisine Hakaret – TCK m.125/3","TCK m.125/3"],
     "Uygunsuzluk Yok": ["Uygunsuzluk Yok","Uygunsuzluk yok","None","Yok"]
 }
-
 PURITY_CANON = {
     "good_faith": ["good_faith","good faith","iyi niyet"],
     "bad_faith": ["bad_faith","bad faith","kötü niyet"],
@@ -171,7 +249,7 @@ def _bar_chart_base64(counts: pd.Series, title: str) -> str | None:
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
 
-def _topn_pie_base64(counts: pd.Series, title: str, n: int = TOP_N, exclude=None) -> str | None:
+def _topn_pie_base64(counts: pd.Series, title: str, n: int = 8, exclude=None) -> str | None:
     if counts is None or counts.empty:
         return None
     if exclude:
@@ -189,7 +267,7 @@ def _topn_pie_base64(counts: pd.Series, title: str, n: int = TOP_N, exclude=None
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
 
-def _donut_topn_base64(counts: pd.Series, title: str, n: int = TOP_N, exclude=None) -> str | None:
+def _donut_topn_base64(counts: pd.Series, title: str, n: int = 8, exclude=None) -> str | None:
     if counts is None or counts.empty:
         return None
     if exclude:
@@ -237,6 +315,9 @@ def summarize_dimension(df: pd.DataFrame, col: str, pretty: str):
         pie64 = _topn_pie_base64(counts, pretty, n=TOP_N)
     return {"counts": counts.to_dict(), "bar_chart": bar64, "pie_chart": pie64}
 
+# -------------------------------
+# API
+# -------------------------------
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"ok": True})
@@ -246,6 +327,7 @@ def analyze():
     f = request.files.get("file")
     if not f:
         return jsonify({"error": "Dosya yüklenmedi (form-data 'file' bekleniyor)."}), 400
+
     try:
         df = pd.read_csv(f, encoding="utf-8-sig")
     except UnicodeDecodeError:
@@ -254,6 +336,39 @@ def analyze():
     except Exception as e:
         return jsonify({"error": f"CSV okunamadı: {e}"}), 400
 
+    # Etiket kolonları yoksa → çoklu hukuki etiket üret ve diğerlerini türet
+    if not any(col in df.columns for col in LABEL_COLS):
+        text_col = next((c for c in TEXT_CANDIDATES if c in df.columns), None)
+        if not text_col:
+            return jsonify({"error": "Yorum metni içeren kolon bulunamadı"}), 422
+
+        sentiments, intents, legals, purities = [], [], [], []
+        for t in df[text_col].fillna("").tolist():
+            legal_list = classify_legal_multi(t, threshold=0.45, max_labels=5)
+            if not legal_list:
+                legal_list = ["Uygunsuzluk Yok"]
+
+            # intent/sentiment/purity kümeleri (hukuki etiketlerden türet)
+            intent_set = set()
+            sentiment_set = set()
+            purity_set = set()
+
+            for lg in legal_list:
+                intent_set.add(LEGAL_TO_INTENT.get(lg, "Kişisel Yorum/Gözlem"))
+                sentiment_set.add(LEGAL_TO_SENTIMENT.get(lg, DEFAULT_SENTIMENT))
+                purity_set.add(LEGAL_TO_PURITY.get(lg, DEFAULT_PURITY))
+
+            legals.append(json.dumps({"choices": list(dict.fromkeys(legal_list))}, ensure_ascii=False))
+            intents.append(json.dumps({"choices": list(dict.fromkeys(intent_set))}, ensure_ascii=False))
+            sentiments.append(json.dumps({"choices": list(dict.fromkeys(sentiment_set))}, ensure_ascii=False))
+            purities.append(json.dumps({"choices": list(dict.fromkeys(purity_set))}, ensure_ascii=False))
+
+        df["sentiment"] = sentiments
+        df["intent"] = intents
+        df["legal"] = legals
+        df["intent_purity"] = purities
+
+    # Analiz özetleri
     results = {}
     for col, pretty in [
         ("sentiment", "Duygu Etiketleri"),
@@ -265,10 +380,7 @@ def analyze():
         if r is not None:
             results[col] = r
 
-    if not results:
-        return jsonify({"error": "Beklenen kolonlar bulunamadı: sentiment, intent, legal, intent_purity"}), 422
-
-    # --- canonical records ---
+    # Kayıtlar + meta (frontend tablo/filtre için)
     text_col = next((c for c in TEXT_CANDIDATES if c in df.columns), None)
     present_label_cols = [c for c in LABEL_COLS if c in df.columns]
     records = []
@@ -276,18 +388,8 @@ def analyze():
         cols = [text_col] + present_label_cols
         slim = df[cols].head(MAX_RECORDS).copy()
         for c in cols:
-            if c == text_col:
-                slim[c] = slim[c].astype(str)
-            else:
-                slim[c] = slim[c].apply(
-                    lambda val: json.dumps({
-                        "choices": [
-                            canonicalize(x, c)
-                            for x in _expand_cell(val)
-                            if canonicalize(x, c)
-                        ]
-                    }, ensure_ascii=False)
-                )
+            if c != text_col:
+                slim[c] = slim[c].apply(lambda val: json.dumps({"choices": _expand_cell(val)}, ensure_ascii=False))
         records = slim.to_dict(orient="records")
 
     meta = {
@@ -302,4 +404,6 @@ def analyze():
     return jsonify(payload)
 
 if __name__ == "__main__":
+    if not HF_TOKEN or HF_TOKEN == "hf_your_token_here":
+        print("UYARI: HF_TOKEN set edilmemiş. Ortam değişkeni HF_TOKEN olarak belirleyebilir ya da koda yazabilirsiniz.")
     app.run(host="127.0.0.1", port=5000, debug=True)
