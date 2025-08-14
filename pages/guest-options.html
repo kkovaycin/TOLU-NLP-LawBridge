@@ -2,96 +2,94 @@
 <html lang="tr">
 
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Anlık Analiz - LawBridge</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anlık Analiz - LawBridge</title>
 
-    <!-- Google Fontlar -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Playwrite+IT+Moderna:wght@100..400&family=Roboto:ital,wght@0,100..900;1,100..900&family=Sansation:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&family=Sour+Gummy:ital,wght@0,100..900;1,100..900&family=Space+Grotesk:wght@300..700&display=swap"
-        rel="stylesheet">
+  <!-- Google Fontlar -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playwrite+IT+Moderna:wght@100..400&family=Roboto:ital,wght@0,100..900;1,100..900&family=Sansation:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&family=Sour+Gummy:ital,wght@0,100..900;1,100..900&family=Space+Grotesk:wght@300..700&display=swap"
+    rel="stylesheet">
 
-    <link rel="stylesheet" href="../styles/global.css" />
-    <link rel="stylesheet" href="../styles/guest.css" />
+  <link rel="stylesheet" href="../styles/global.css" />
+  <link rel="stylesheet" href="../styles/guest.css" />
 
-    <script src="../scripts/fileCheck.js"></script>
+  <script src="../scripts/fileCheck.js"></script>
 </head>
 
 <body>
   <!-- HEADER -->
-<header class="header">
-  <a href="#top" class="brand-name">LawBridge</a>
+  <header class="header">
+    <a href="#top" class="brand-name">LawBridge</a>
 
-  <!-- Hamburger icon (sadece küçük ekranda görünecek) -->
-  <div class="hamburger" id="hamburger">
-    <span></span>
-    <span></span>
-    <span></span>
-  </div>
+    <div class="hamburger" id="hamburger">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
 
-  <!-- Navigation links -->
-  <nav class="nav" id="nav">
-    <a href="#about">Hakkımızda</a>
-    <a href="#team">Ekipten Mesaj</a>
-    <a href="guest-options.html">Analiz Et</a>
-    <a href="login.html" onclick="localStorage.setItem('registerSource', 'menu')">Giriş / Misafir</a>
+    <nav class="nav" id="nav">
+      <a href="#about">Hakkımızda</a>
+      <a href="#team">Ekipten Mesaj</a>
+      <a href="guest-options.html">Analiz Et</a>
+      <a href="login.html" onclick="localStorage.setItem('registerSource', 'menu')">Giriş / Misafir</a>
+    </nav>
+  </header>
 
-  </nav>
-</header>
+  <!-- ANA BAŞLIK -->
+  <section class="intro-section fade-in-top">
+    <h1>Yorumlarını Hızlıca Analiz Et</h1>
+    <p>Kayıt olmadan sosyal medya içeriğini veya dosyanı analiz ettirebilirsin.</p>
+  </section>
 
-    <!-- ANA BAŞLIK -->
-    <section class="intro-section fade-in-top">
-        <h1>Yorumlarını Hızlıca Analiz Et</h1>
-        <p>Kayıt olmadan sosyal medya içeriğini veya dosyanı analiz ettirebilirsin.</p>
-    </section>
+  <!-- ANALİZ KARTI -->
+  <section class="card-container fade-in-delayed">
+    <div class="card glass">
+      <h2 class="with-icon">
+        <img src="../assets/svg/link.svg" alt="Link ikonu" class="inline-icon" />
+        Anlık Analiz
+      </h2>
 
-    <!-- ANALİZ KARTI -->
-    <section class="card-container fade-in-delayed">
-        <div class="card glass">
-            <h2 class="with-icon">
-                <img src="../assets/svg/link.svg" alt="Link ikonu" class="inline-icon" />
-                Anlık Analiz
-            </h2>
+      <!-- DEĞİŞTİ: id eklendi -->
+      <input id="linkInput" type="text" placeholder="YouTube video linkini buraya yapıştır (veya ID)" />
 
-            <input type="text" placeholder="Yorum linkini buraya yapıştır" />
+      <p style="margin: 0.5rem 0; text-align:center;">veya</p>
 
-            <p style="margin: 0.5rem 0; text-align:center;">veya</p>
+      <!-- Özel tasarımlı dosya seçici -->
+      <div class="custom-file-upload" id="customFileUpload">
+        <span id="fileLabel">Dosya seç</span>
+        <input type="file" id="fileInput" accept=".txt,.csv" />
+      </div>
 
-            <!-- Özel tasarımlı dosya seçici -->
-            <div class="custom-file-upload" id="customFileUpload">
-                <span id="fileLabel">Dosya seç</span>
-                <input type="file" id="fileInput" accept=".txt,.csv" />
-            </div>
+      <p class="file-note">Desteklenen formatlar: .txt, .csv</p>
 
-            <p class="file-note">Desteklenen formatlar: .txt, .csv</p>
+      <button class="btn">Analiz Et</button>
+    </div>
+  </section>
 
-            <button class="btn">Analiz Et</button>
-        </div>
-    </section>
+  <!-- MOD AÇIKLAMA PARAGRAFI -->
+  <section class="fade-in-late" style="text-align: center; max-width: 700px; margin: 3rem auto; padding: 0 1rem;">
+    <p style="font-size: 1.05rem; color: #444;">
+      Daha detaylı analizler ve düzenli takip için hesabını bağlayabilir, düzenli veya düzensiz modları
+      keşfedebilirsin. Bu özelliklerden yararlanmak için
+      <a href="./login.html" class="login-highlight">Giriş Yap.</a>
+    </p>
+  </section>
 
-    <!-- MOD AÇIKLAMA PARAGRAFI -->
-    <section class="fade-in-late" style="text-align: center; max-width: 700px; margin: 3rem auto; padding: 0 1rem;">
-        <p style="font-size: 1.05rem; color: #444;">
-            Daha detaylı analizler ve düzenli takip için hesabını bağlayabilir, düzenli veya düzensiz modları
-            keşfedebilirsin. Bu özelliklerden yararlanmak için
-            <a href="./login.html" class="login-highlight">Giriş Yap.</a>
-        </p>
-    </section>
-
-    <!-- FOOTER -->
-    <footer class="footer">
-        <p>
-            <a href="#">© 2025 LawBridge</a>
-            <span class="dot">·</span>
-            <a href="#">Tüm hakları saklıdır</a>
-            <span class="dot">·</span>
-            <a href="#">Gizlilik Politikası</a>
-            <span class="dot">·</span>
-            <a href="#">İletişim</a>
-        </p>
-    </footer>
+  <!-- FOOTER -->
+  <footer class="footer">
+    <p>
+      <a href="#">© 2025 LawBridge</a>
+      <span class="dot">·</span>
+      <a href="#">Tüm hakları saklıdır</a>
+      <span class="dot">·</span>
+      <a href="#">Gizlilik Politikası</a>
+      <span class="dot">·</span>
+      <a href="#">İletişim</a>
+    </p>
+  </footer>
 </body>
 
 </html>
