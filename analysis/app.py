@@ -1,34 +1,41 @@
 # app.py
 # -*- coding: utf-8 -*-
+import os, re, io, json, time, unicodedata
+from urllib.parse import urlparse, parse_qs
+from typing import List, Dict, Any, Optional
+
+import pandas as pd
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pandas as pd
+
+# Matplotlib grafikleri için headless
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import base64
 from io import BytesIO
+import base64
 from textwrap import wrap
-import unicodedata, re, json, os
 
-# ============================
-# Hugging Face - Lokal model
-# ============================
+# ==========================
+# MODEL (Hugging Face)
+# ==========================
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 
-HF_TOKEN    = os.getenv("HF_TOKEN", "your_hf_token")   
-MODEL_LEGAL = "lawbridge/lawbridge-legal-model"           
+HF_TOKEN = os.getenv("HF_TOKEN", "").strip() or "hf_token"
+MODEL_LEGAL = "lawbridge/lawbridge-legal-model"
 
-# Model & tokenizer (ilk çalıştırmada indirir, sonra cache'den yükler)
-tokenizer_legal = AutoTokenizer.from_pretrained(MODEL_LEGAL, token=HF_TOKEN)
-model_legal     = AutoModelForSequenceClassification.from_pretrained(MODEL_LEGAL, token=HF_TOKEN)
+def _hf_kwargs():
+    return {"token": HF_TOKEN} if HF_TOKEN else {}
+
+tokenizer_legal = AutoTokenizer.from_pretrained(MODEL_LEGAL, **_hf_kwargs())
+model_legal     = AutoModelForSequenceClassification.from_pretrained(MODEL_LEGAL, **_hf_kwargs())
+LEGAL_MAXLEN = int(os.getenv("LEGAL_MAXLEN", "128"))
 clf_legal = pipeline("text-classification", model=model_legal, tokenizer=tokenizer_legal)
 
 def classify_legal_multi(text: str, threshold: float = 0.45, max_labels: int = 5) -> list[str]:
     """
     Çoklu etiket: tüm skorları al, 'threshold' üzerindekileri sırayla seç.
     Hiçbiri geçmezse en yüksek skorlu 1 etiketi döndür.
-    max_labels None ise sınırsız; aksi halde üst sınır uygulanır.
     """
     if not text or not str(text).strip():
         return []
@@ -37,21 +44,21 @@ def classify_legal_multi(text: str, threshold: float = 0.45, max_labels: int = 5
             str(text),
             return_all_scores=True,
             function_to_apply="sigmoid",
-            top_k=None
+            top_k=None,
+            truncation=True,          
+            max_length=LEGAL_MAXLEN   
         )
         # Bazı sürümlerde [[]] sarılı gelebilir:
         if isinstance(out, list) and out and isinstance(out[0], list):
             out = out[0]
         if not isinstance(out, list):
             return []
-
         out = sorted(out, key=lambda d: d.get("score", 0.0), reverse=True)
         picked = [d["label"] for d in out if d.get("score", 0.0) >= threshold]
         if not picked and out:
             picked = [out[0]["label"]]  # en iyisini al
         if max_labels:
             picked = picked[:max_labels]
-        # Aynı label tekrarlarını temizle
         return list(dict.fromkeys(picked))
     except Exception as e:
         print("[LEGAL MULTI ERROR]", e)
@@ -85,25 +92,25 @@ LEGAL_TO_PURITY = {
 DEFAULT_SENTIMENT = "Olumsuz"
 DEFAULT_PURITY    = "uncertain"
 
-# --------------------------------------------------------------------
-# Flask
-# --------------------------------------------------------------------
+# ==========================
+# Uygulama
+# ==========================
 app = Flask(__name__)
 CORS(app)
 
-TOP_N = 8  # Donut/Pie grafikte gösterilecek en çok geçen etiket sayısı
+TOP_N = 8
 TEXT_CANDIDATES = ["text", "yorum", "comment", "content", "tweet", "message", "body"]
 LABEL_COLS = ["sentiment", "intent", "legal", "intent_purity"]
 MAX_RECORDS = 2000
 
-# -------------------------------
-# Yardımcılar
-# -------------------------------
+# ==========================
+# Yardımcılar (genel)
+# ==========================
 def strip_accents(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
 def keyify(s: str) -> str:
-    s = strip_accents(s.lower())
+    s = strip_accents((s or "").lower())
     s = re.sub(r"\s+", " ", s).strip()
     return re.sub(r"[^\w]+", "", s)
 
@@ -113,7 +120,6 @@ ZERO_WIDTHS_RE     = re.compile(r"[\u200B-\u200D\uFEFF]")
 def preclean_cell(text: str) -> str:
     t = ZERO_WIDTHS_RE.sub("", str(text))
     t = CHOICES_PREFIX_RE.sub("", t)
-    # m.8, 11 → m.8 11 normalize
     t = re.sub(r"(?i)\bm\.?\s*(\d+)\s*,\s*(\d+)\b", r"m.\1 \2", t)
     t = re.sub(r"[;|]+", ",", t)
     t = re.sub(r",\s*,", ",", t)
@@ -155,7 +161,7 @@ def explode_multilabel(series: pd.Series) -> pd.Series:
     s = s[(s != "") & s.str.contains(r"[A-Za-z0-9ÇŞĞÜÖİçşğüöı]", regex=True)]
     return s
 
-# ---- Kanonik sözlükler ----
+# ---- Kanonik sözlükler (görsel/özet için) ----
 SENTIMENT_CANON = {
     "Öfke/Kızgınlık": ["Öfke / Kızgınlık","Öfke","Kızgınlık"],
     "Üzüntü/Keder": ["Üzüntü / Keder","Üzüntü","Keder"],
@@ -258,7 +264,8 @@ def _topn_pie_base64(counts: pd.Series, title: str, n: int = 8, exclude=None) ->
         return None
     topn = counts.head(n)
     plt.figure(figsize=(7,7))
-    plt.pie(topn.values, labels=topn.index, autopct='%1.1f%%', startangle=140)
+    labels = [str(x).replace("%", "%%") for x in topn.index]
+    plt.pie(topn.values, labels=labels, autopct='%1.1f%%', startangle=140)
     plt.title(f"{title} - En Çok {len(topn)} Etiket")
     plt.axis('equal')
     buf = BytesIO()
@@ -285,7 +292,8 @@ def _donut_topn_base64(counts: pd.Series, title: str, n: int = 8, exclude=None) 
     )
     ax.set_title(f"{title} – En Çok {min(n, len(counts))} Etiket (+Diğer)")
     ax.axis('equal')
-    legend_labels = [f"{name} ({int(val)})" for name, val in zip(top.index, top.values)]
+    legend_labels = [f"{str(name).replace('%','%%')} ({int(val)})"
+                 for name, val in zip(top.index, top.values)]
     ax.legend(wedges, legend_labels, loc="center left", bbox_to_anchor=(1, 0.5),
               frameon=False, title="Etiketler")
     buf = BytesIO()
@@ -315,60 +323,175 @@ def summarize_dimension(df: pd.DataFrame, col: str, pretty: str):
         pie64 = _topn_pie_base64(counts, pretty, n=TOP_N)
     return {"counts": counts.to_dict(), "bar_chart": bar64, "pie_chart": pie64}
 
-# -------------------------------
-# API
-# -------------------------------
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({"ok": True})
+# ==========================
+# YouTube Yardımcıları
+# ==========================
+from googleapiclient.discovery import build as gbuild
+from googleapiclient.errors import HttpError
 
-@app.route("/analyze", methods=["POST"])
-def analyze():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "Dosya yüklenmedi (form-data 'file' bekleniyor)."}), 400
+# YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()  # boşsa link akışı çalışmaz
+YOUTUBE_API_KEY = "your_api_key"
+SLEEP_BETWEEN_CALLS = 0.05
 
+def _extract_video_id(url_or_id: str) -> Optional[str]:
+    s = (url_or_id or "").strip()
+    if re.fullmatch(r"[A-Za-z0-9_\-]{8,}", s):
+        return s
     try:
-        df = pd.read_csv(f, encoding="utf-8-sig")
-    except UnicodeDecodeError:
-        f.seek(0)
-        df = pd.read_csv(f, encoding="utf-8", engine="python")
-    except Exception as e:
-        return jsonify({"error": f"CSV okunamadı: {e}"}), 400
+        u = urlparse(s)
+    except Exception:
+        return None
+    if u.netloc in {"youtu.be"}:
+        vid = u.path.lstrip("/")
+        return vid or None
+    if u.netloc.endswith("youtube.com"):
+        qs = parse_qs(u.query)
+        if "v" in qs and qs["v"]:
+            return qs["v"][0]
+        m = re.match(r"^/shorts/([A-Za-z0-9_\-]+)", u.path or "")
+        if m: return m.group(1)
+        m = re.match(r"^/live/([A-Za-z0-9_\-]+)", u.path or "")
+        if m: return m.group(1)
+    return None
 
-    # Etiket kolonları yoksa → çoklu hukuki etiket üret ve diğerlerini türet
-    if not any(col in df.columns for col in LABEL_COLS):
-        text_col = next((c for c in TEXT_CANDIDATES if c in df.columns), None)
-        if not text_col:
-            return jsonify({"error": "Yorum metni içeren kolon bulunamadı"}), 422
+def _yt_client(api_key: str):
+    if not api_key:
+        raise RuntimeError("YOUTUBE_API_KEY eksik.")
+    return gbuild("youtube", "v3", developerKey=api_key)
 
-        sentiments, intents, legals, purities = [], [], [], []
-        for t in df[text_col].fillna("").tolist():
-            legal_list = classify_legal_multi(t, threshold=0.45, max_labels=5)
-            if not legal_list:
-                legal_list = ["Uygunsuzluk Yok"]
+def _get_video_meta(youtube, video_id: str) -> Dict[str, Any]:
+    r = youtube.videos().list(part="snippet", id=video_id, maxResults=1).execute()
+    items = r.get("items", [])
+    if not items:
+        raise ValueError(f"Video bulunamadı: {video_id}")
+    sn = items[0]["snippet"]
+    return {
+        "videoId": video_id,
+        "videoTitle": sn.get("title", ""),
+        "channelId": sn.get("channelId", ""),
+        "channelTitle": sn.get("channelTitle", ""),
+    }
 
-            # intent/sentiment/purity kümeleri (hukuki etiketlerden türet)
-            intent_set = set()
-            sentiment_set = set()
-            purity_set = set()
+def _fetch_all_replies(youtube, parent_id: str) -> List[Dict[str, Any]]:
+    replies, page_token = [], None
+    while True:
+        time.sleep(SLEEP_BETWEEN_CALLS)
+        r = youtube.comments().list(
+            part="snippet", parentId=parent_id, maxResults=100,
+            pageToken=page_token, textFormat="plainText"
+        ).execute()
+        for c in r.get("items", []):
+            s = c["snippet"]
+            replies.append({
+                "commentId": c.get("id"),
+                "parentId": parent_id,
+                "isReply": 1,
+                "authorDisplayName": s.get("authorDisplayName"),
+                "authorChannelId": (s.get("authorChannelId") or {}).get("value"),
+                "publishedAt": s.get("publishedAt"),
+                "likeCount": s.get("likeCount"),
+                "text": s.get("textDisplay"),
+            })
+        page_token = r.get("nextPageToken")
+        if not page_token:
+            break
+    return replies
 
-            for lg in legal_list:
-                intent_set.add(LEGAL_TO_INTENT.get(lg, "Kişisel Yorum/Gözlem"))
-                sentiment_set.add(LEGAL_TO_SENTIMENT.get(lg, DEFAULT_SENTIMENT))
-                purity_set.add(LEGAL_TO_PURITY.get(lg, DEFAULT_PURITY))
+def _fetch_all_comments(youtube, video_id: str) -> List[Dict[str, Any]]:
+    rows, page_token = [], None
+    while True:
+        time.sleep(SLEEP_BETWEEN_CALLS)
+        r = youtube.commentThreads().list(
+            part="snippet,replies", videoId=video_id, maxResults=100,
+            pageToken=page_token, textFormat="plainText", order="time"
+        ).execute()
+        for item in r.get("items", []):
+            top = item["snippet"]["topLevelComment"]["snippet"]
+            top_id = item["snippet"]["topLevelComment"]["id"]
+            rows.append({
+                "commentId": top_id,
+                "parentId": "",
+                "isReply": 0,
+                "authorDisplayName": top.get("authorDisplayName"),
+                "authorChannelId": (top.get("authorChannelId") or {}).get("value"),
+                "publishedAt": top.get("publishedAt"),
+                "likeCount": top.get("likeCount"),
+                "text": top.get("textDisplay"),
+            })
+            rows.extend(_fetch_all_replies(youtube, top_id))
+        page_token = r.get("nextPageToken")
+        if not page_token:
+            break
+    return rows
 
-            legals.append(json.dumps({"choices": list(dict.fromkeys(legal_list))}, ensure_ascii=False))
-            intents.append(json.dumps({"choices": list(dict.fromkeys(intent_set))}, ensure_ascii=False))
-            sentiments.append(json.dumps({"choices": list(dict.fromkeys(sentiment_set))}, ensure_ascii=False))
-            purities.append(json.dumps({"choices": list(dict.fromkeys(purity_set))}, ensure_ascii=False))
+# ==========================
+# IO: Dosya okuma
+# ==========================
+def read_uploaded_file_to_df(file_storage) -> pd.DataFrame:
+    filename = (file_storage.filename or "").lower()
+    data = file_storage.read()
+    if not data:
+        raise ValueError("Boş dosya.")
+    bio = io.BytesIO(data)
 
-        df["sentiment"] = sentiments
-        df["intent"] = intents
-        df["legal"] = legals
-        df["intent_purity"] = purities
+    if filename.endswith(".csv"):
+        try:
+            return pd.read_csv(bio, encoding="utf-8-sig")
+        except UnicodeDecodeError:
+            bio.seek(0)
+            return pd.read_csv(bio, encoding="utf-8", engine="python")
+    elif filename.endswith(".xlsx") or filename.endswith(".xls"):
+        return pd.read_excel(bio)
+    elif filename.endswith(".json"):
+        return pd.read_json(bio, lines=False)
+    else:
+        bio.seek(0)
+        try:
+            return pd.read_csv(bio)
+        except Exception:
+            bio.seek(0)
+            return pd.read_excel(bio)
 
-    # Analiz özetleri
+# ==========================
+# Analiz Pipeline
+# ==========================
+def choose_text_column(df: pd.DataFrame) -> Optional[str]:
+    for c in TEXT_CANDIDATES:
+        if c in df.columns:
+            return c
+    # fallback: en uzun object sütunu
+    obj_cols = [c for c in df.columns if df[c].dtype == "object"]
+    if not obj_cols:
+        return None
+    scores = {c: df[c].dropna().astype(str).map(len).mean() for c in obj_cols}
+    return max(scores, key=scores.get) if scores else None
+
+def _maybe_label_with_model(df: pd.DataFrame, text_col: Optional[str]) -> pd.DataFrame:
+    if not text_col:
+        return df
+    sentiments, intents, legals, purities = [], [], [], []
+    for t in df[text_col].fillna("").tolist():
+        legal_list = classify_legal_multi(t, threshold=0.45, max_labels=5) or ["Uygunsuzluk Yok"]
+        intent_set = {LEGAL_TO_INTENT.get(lg, "Kişisel Yorum/Gözlem") for lg in legal_list}
+        sentiment_set = {LEGAL_TO_SENTIMENT.get(lg, DEFAULT_SENTIMENT) for lg in legal_list}
+        purity_set = {LEGAL_TO_PURITY.get(lg, DEFAULT_PURITY) for lg in legal_list}
+        legals.append(json.dumps({"choices": list(dict.fromkeys(legal_list))}, ensure_ascii=False))
+        intents.append(json.dumps({"choices": list(dict.fromkeys(list(intent_set)))}, ensure_ascii=False))
+        sentiments.append(json.dumps({"choices": list(dict.fromkeys(list(sentiment_set)))}, ensure_ascii=False))
+        purities.append(json.dumps({"choices": list(dict.fromkeys(list(purity_set)))}, ensure_ascii=False))
+    df = df.copy()
+    df["sentiment"] = sentiments
+    df["intent"] = intents
+    df["legal"] = legals
+    df["intent_purity"] = purities
+    return df
+
+def _summarize_like_analyze(df: pd.DataFrame) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {}
+    text_col = choose_text_column(df)
+    present_label_cols = [c for c in LABEL_COLS if c in df.columns]
+
+    # Özetler
     results = {}
     for col, pretty in [
         ("sentiment", "Duygu Etiketleri"),
@@ -376,34 +499,113 @@ def analyze():
         ("legal", "Hukuki Sınıflandırma"),
         ("intent_purity", "Niyet Temizliği"),
     ]:
-        r = summarize_dimension(df, col, pretty)
-        if r is not None:
-            results[col] = r
+        if col in df.columns:
+            r = summarize_dimension(df, col, pretty)
+            if r is not None:
+                results[col] = r
 
-    # Kayıtlar + meta (frontend tablo/filtre için)
-    text_col = next((c for c in TEXT_CANDIDATES if c in df.columns), None)
-    present_label_cols = [c for c in LABEL_COLS if c in df.columns]
+    # Kayıtlar
     records = []
     if text_col:
-        cols = [text_col] + present_label_cols
+        cols = [text_col] + [c for c in LABEL_COLS if c in df.columns]
         slim = df[cols].head(MAX_RECORDS).copy()
         for c in cols:
-            if c != text_col:
-                slim[c] = slim[c].apply(lambda val: json.dumps({"choices": _expand_cell(val)}, ensure_ascii=False))
+            if c != text_col and c in slim.columns:
+                slim[c] = slim[c].apply(lambda v: json.dumps({"choices": _expand_cell(v)}, ensure_ascii=False))
         records = slim.to_dict(orient="records")
 
-    meta = {
+    payload.update(results)
+    payload["records"] = records
+    payload["meta"] = {
         "text_col": text_col,
-        "label_cols": present_label_cols,
+        "label_cols": [c for c in LABEL_COLS if c in df.columns],
         "total_rows": int(len(df))
     }
+    return payload
 
-    payload = dict(results)
-    payload["records"] = records
-    payload["meta"] = meta
-    return jsonify(payload)
+# ==========================
+# API
+# ==========================
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"ok": True})
 
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    ct = (request.content_type or "").lower()
+
+    # 1) JSON ile YouTube link akışı (CSV yazmadan)
+    if "application/json" in ct:
+        try:
+            j = request.get_json(force=True, silent=False) or {}
+            url = (j.get("url") or "").strip()
+        except Exception:
+            url = ""
+        if url:
+            if not YOUTUBE_API_KEY:
+                return jsonify({"error": "YOUTUBE_API_KEY ayarlı değil; link akışı kullanılamaz."}), 400
+            try:
+                vid = _extract_video_id(url)
+                if not vid:
+                    return jsonify({"error": "Video linki/ID geçersiz."}), 400
+
+                yt = _yt_client(YOUTUBE_API_KEY)
+                meta = _get_video_meta(yt, vid)
+                rows = _fetch_all_comments(yt, vid)
+
+                # DF
+                df = pd.DataFrame(rows)
+                if "text" not in df.columns:
+                    df.rename(columns={"Yorum Metni": "text"}, inplace=True)
+                    if "text" not in df.columns:
+                        df["text"] = ""
+
+                # video meta her satıra
+                df.insert(0, "videoChannelTitle", meta["channelTitle"])
+                df.insert(1, "videoTitle", meta["videoTitle"])
+                df.insert(2, "videoId", meta["videoId"])
+
+                # >>> CSV ADIMI KALDIRILDI <<<
+
+                # Model etiketleme + özet
+                text_col   = choose_text_column(df)
+                df_labeled = _maybe_label_with_model(df, text_col)
+                payload    = _summarize_like_analyze(df_labeled)
+                payload["video_meta"] = meta
+                return jsonify(payload)
+
+            except HttpError as e:
+                return jsonify({"error": f"YouTube API hatası: {e}"}), 502
+            except Exception as e:
+                return jsonify({"error": f"YouTube akış hatası: {e}"}), 500
+
+    # 2) Dosya akışı (multipart/form-data)
+    if "multipart/form-data" in ct and "file" in request.files:
+        try:
+            f = request.files["file"]
+            df = read_uploaded_file_to_df(f)
+
+            # Text kolonu belirle ve model etiketleme yap
+            text_col = choose_text_column(df)
+            if not text_col:
+                obj_cols = [c for c in df.columns if df[c].dtype == "object"]
+                if obj_cols:
+                    df = df.rename(columns={obj_cols[0]: "text"})
+                    text_col = "text"
+
+            df_labeled = _maybe_label_with_model(df, text_col)
+            payload = _summarize_like_analyze(df_labeled)
+            return jsonify(payload)
+
+        except Exception as e:
+            return jsonify({"error": f"Dosya analizi hatası: {e}"}), 400
+
+    return jsonify({"error": "Geçersiz istek. JSON {url: ...} veya multipart/form-data ile dosya yükleyin."}), 400
+
+# ==========================
+# Main
+# ==========================
 if __name__ == "__main__":
-    if not HF_TOKEN or HF_TOKEN == "hf_your_token_here":
-        print("UYARI: HF_TOKEN set edilmemiş. Ortam değişkeni HF_TOKEN olarak belirleyebilir ya da koda yazabilirsiniz.")
+    if not HF_TOKEN:
+        print("UYARI: HF_TOKEN set edilmemiş. Model private ise indirme/yükleme hatası alabilirsin.")
     app.run(host="127.0.0.1", port=5000, debug=True)
