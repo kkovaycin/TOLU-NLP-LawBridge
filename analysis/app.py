@@ -21,7 +21,7 @@ from textwrap import wrap
 # ==========================
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 
-HF_TOKEN = os.getenv("HF_TOKEN", "").strip() or "hf_token"
+HF_TOKEN = os.getenv("HF_TOKEN", "").strip() or "your_token"
 MODEL_LEGAL = "lawbridge/lawbridge-legal-model"
 
 def _hf_kwargs():
@@ -36,6 +36,7 @@ def classify_legal_multi(text: str, threshold: float = 0.45, max_labels: int = 5
     """
     Çoklu etiket: tüm skorları al, 'threshold' üzerindekileri sırayla seç.
     Hiçbiri geçmezse en yüksek skorlu 1 etiketi döndür.
+    'Uygunsuzluk Yok' başka bir etiketle birlikte asla dönmez.
     """
     if not text or not str(text).strip():
         return []
@@ -45,20 +46,30 @@ def classify_legal_multi(text: str, threshold: float = 0.45, max_labels: int = 5
             return_all_scores=True,
             function_to_apply="sigmoid",
             top_k=None,
-            truncation=True,          
-            max_length=LEGAL_MAXLEN   
+            truncation=True,
+            max_length=LEGAL_MAXLEN
         )
         # Bazı sürümlerde [[]] sarılı gelebilir:
         if isinstance(out, list) and out and isinstance(out[0], list):
             out = out[0]
         if not isinstance(out, list):
             return []
+
         out = sorted(out, key=lambda d: d.get("score", 0.0), reverse=True)
+
         picked = [d["label"] for d in out if d.get("score", 0.0) >= threshold]
         if not picked and out:
-            picked = [out[0]["label"]]  # en iyisini al
+            picked = [out[0]["label"]]  # en yüksek skoru al
+
+        # === Kritik kural: 'Uygunsuzluk Yok' yalnız başına olabilir ===
+        NONE_LABEL = "Uygunsuzluk Yok"
+        if picked and any(lbl != NONE_LABEL for lbl in picked) and NONE_LABEL in picked:
+            picked = [lbl for lbl in picked if lbl != NONE_LABEL]
+
         if max_labels:
             picked = picked[:max_labels]
+
+        # Sıra koruyarak tekilleştir
         return list(dict.fromkeys(picked))
     except Exception as e:
         print("[LEGAL MULTI ERROR]", e)
