@@ -1,0 +1,70 @@
+{# ======================================================
+   LawBridge – Çoklu Etiket Dilekçe Şablonu (Jinja2)
+   Girdiler:
+     - labels: list[str]  # aşağıdaki tam adlardan biri/çoklu
+     - platform, tarih, yorum, yorum_linki, ad_soyad, bugun_tarih
+   Desteklenen tam adlar (birebir):
+     "Hakaret – TCK m.125",
+     "Tehdit – TCK m.106",
+     "Taciz – TCK m.105, 123",
+     "Nefret / Ayrımcılık – TCK m.122",
+     "Toplumu Kin ve Düşmanlığa Tahrik – TCK m.216",
+     "Veri İhlali – KVKK m.12, TCK m.136",
+     "Ayıplı Mal / Hizmet – TKHK m.8, 11",
+     "Dolandırıcılık / Sahte Kampanya – TCK m.157",
+     "Kamu Görevlisine Hakaret – TCK m.125/3"
+   ====================================================== #}
+
+{% set RESEN = "ve resen tespit edilecek diğer suçlar yönünden de işlem yapılmasını" %}
+{% set TAKDIR = "Hukuki nitelendirmenin (suç vasfının) takdiri makamınızındır." %}
+
+{# Etiket -> mevzuat satırları eşlemesi #}
+{% set law_map = {
+  "Hakaret – TCK m.125": ["TCK m.125 – Hakaret"],
+  "Tehdit – TCK m.106": ["TCK m.106 – Tehdit"],
+  "Taciz – TCK m.105, 123": ["TCK m.105 – Cinsel Taciz", "TCK m.123 – Kişilerin huzur ve sükûnunu bozma"],
+  "Nefret / Ayrımcılık – TCK m.122": ["TCK m.122 – Kişiler arasında ayrımcılık yapılması"],
+  "Toplumu Kin ve Düşmanlığa Tahrik – TCK m.216": ["TCK m.216 – Halkı kin ve düşmanlığa tahrik veya aşağılama"],
+  "Veri İhlali – KVKK m.12, TCK m.136": ["KVKK m.12 – Veri Güvenliği", "TCK m.136 – Verileri hukuka aykırı olarak verme veya ele geçirme"],
+  "Ayıplı Mal / Hizmet – TKHK m.8, 11": ["TKHK m.8 – Ayıplı mal/hizmet", "TKHK m.11 – Tüketicinin seçimlik hakları"],
+  "Dolandırıcılık / Sahte Kampanya – TCK m.157": ["TCK m.157 – Dolandırıcılık"],
+  "Kamu Görevlisine Hakaret – TCK m.125/3": ["TCK m.125/3 – Kamu görevlisine görevinden dolayı hakaret"]
+} %}
+
+{# KONU başlığını etiketlerle oluştur #}
+{% if labels and labels|length > 0 %}
+KONU: {{ labels|join(", ") }} {{ RESEN }} talep eden şikayet.
+{% else %}
+KONU: (Etiket seçilmedi)
+{% endif %}
+
+AÇIKLAMALAR:
+{{ platform }} üzerinde {{ tarih }} tarihinde “{{ yorum }}” içerikli paylaşım/yorum yapılmıştır.
+Bu içerik, yukarıda **KONU** kısmında belirtilen suç tiplerine ilişkin değerlendirmeye konu edilmesini gerektirmektedir.
+{{ TAKDIR }}
+
+{# Kamu görevlisine hakaret seçildiyse açıklayıcı cümle ekle #}
+{% if "Kamu Görevlisine Hakaret – TCK m.125/3" in labels %}
+Ayrıca söz konusu ifadelerin, kamu görevlisine görevinden dolayı yöneltildiği değerlendirilmektedir.
+{% endif %}
+
+İLGİLİ MEVZUAT:
+{# Seçilen tüm etiketlerin mevzuat satırlarını, tekrar etmeyecek şekilde yaz #}
+{% set written = [] %}
+{% for L in labels %}
+  {% for m in law_map.get(L, []) %}
+    {% if m not in written %}
+{{ m }}{% set _ = written.append(m) %}
+    {% endif %}
+  {% endfor %}
+{% endfor %}
+
+DELİL:
+Söz konusu içerik {{ yorum_linki }} bağlantısında yer almaktadır.
+
+SONUÇ ve TALEP:
+Şikayetimin işleme alınmasını, gerekli soruşturmanın yapılmasını {{ RESEN }} arz ederim.
+
+Ad Soyad: {{ ad_soyad }}
+İmza: ________
+Tarih: {{ bugun_tarih }}
