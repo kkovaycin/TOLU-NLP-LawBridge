@@ -1,20 +1,31 @@
 # app.py
 # -*- coding: utf-8 -*-
-import os, re, io, json, time, unicodedata
+import os, re, io, json, time, unicodedata, base64
 from urllib.parse import urlparse, parse_qs
 from typing import List, Dict, Any, Optional
 
 import pandas as pd
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS, cross_origin
 
 # Matplotlib grafikleri için headless
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from io import BytesIO
-import base64
 from textwrap import wrap
+
+from pathlib import Path
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+# ReportLab (PDF)
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import cm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+from datetime import datetime
 
 # ==========================
 # MODEL (Hugging Face)
@@ -49,19 +60,16 @@ def classify_legal_multi(text: str, threshold: float = 0.45, max_labels: int = 5
             truncation=True,
             max_length=LEGAL_MAXLEN
         )
-        # Bazı sürümlerde [[]] sarılı gelebilir:
         if isinstance(out, list) and out and isinstance(out[0], list):
             out = out[0]
         if not isinstance(out, list):
             return []
 
         out = sorted(out, key=lambda d: d.get("score", 0.0), reverse=True)
-
         picked = [d["label"] for d in out if d.get("score", 0.0) >= threshold]
         if not picked and out:
-            picked = [out[0]["label"]]  # en yüksek skoru al
+            picked = [out[0]["label"]]
 
-        # === Kritik kural: 'Uygunsuzluk Yok' yalnız başına olabilir ===
         NONE_LABEL = "Uygunsuzluk Yok"
         if picked and any(lbl != NONE_LABEL for lbl in picked) and NONE_LABEL in picked:
             picked = [lbl for lbl in picked if lbl != NONE_LABEL]
@@ -69,7 +77,6 @@ def classify_legal_multi(text: str, threshold: float = 0.45, max_labels: int = 5
         if max_labels:
             picked = picked[:max_labels]
 
-        # Sıra koruyarak tekilleştir
         return list(dict.fromkeys(picked))
     except Exception as e:
         print("[LEGAL MULTI ERROR]", e)
@@ -90,15 +97,12 @@ LEGAL_TO_INTENT = {
     "Toplumu Kin ve Düşmanlığa Tahrik – TCK m.216": "Kamuoyu Bilgilendirmesi/Uyarı",
     "Uygunsuzluk Yok": "Kişisel Yorum/Gözlem",
 }
-LEGAL_TO_SENTIMENT = {
-    "Uygunsuzluk Yok": "Nötr",
-}
+LEGAL_TO_SENTIMENT = { "Uygunsuzluk Yok": "Nötr" }
 LEGAL_TO_PURITY = {
     "Hakaret – TCK m.125": "bad_faith",
     "Kamu Görevlisine Hakaret – TCK m.125/3": "bad_faith",
     "Tehdit – TCK m.106": "bad_faith",
     "Taciz – TCK m.105, 123": "bad_faith",
-    # Diğerleri belirsiz kabul edilecek
 }
 DEFAULT_SENTIMENT = "Olumsuz"
 DEFAULT_PURITY    = "uncertain"
@@ -108,6 +112,23 @@ DEFAULT_PURITY    = "uncertain"
 # ==========================
 app = Flask(__name__)
 CORS(app)
+
+# --- DejaVu fontlarını yükle (Türkçe için şart) ---
+BASE_DIR  = Path(__file__).resolve().parent                  # .../analysis
+FONTS_DIR = BASE_DIR.parent / "assets" / "fonts" / "dejavu-sans"
+try:
+    pdfmetrics.registerFont(TTFont("DejaVu",      str(FONTS_DIR / "DejaVuSans.ttf")))
+    pdfmetrics.registerFont(TTFont("DejaVu-Bold", str(FONTS_DIR / "DejaVuSans-Bold.ttf")))
+    print("Fontlar yüklendi:", pdfmetrics.getRegisteredFontNames())
+except Exception as e:
+    print("FONT register hatası:", e)
+
+# --- Jinja template config (legal complaint template/ dizini proje kökünde) ---
+TEMPLATE_DIR = BASE_DIR.parent / "legal complaint template"
+env = Environment(
+    loader=FileSystemLoader(str(TEMPLATE_DIR)),
+    autoescape=select_autoescape(enabled_extensions=("j2",))
+)
 
 TOP_N = 8
 TEXT_CANDIDATES = ["text", "yorum", "comment", "content", "tweet", "message", "body"]
@@ -126,7 +147,7 @@ def keyify(s: str) -> str:
     return re.sub(r"[^\w]+", "", s)
 
 CHOICES_PREFIX_RE = re.compile(r"(?i)\bchoices\s*[:：﹕꞉︰⦂⸬\-—–]*\s*")
-ZERO_WIDTHS_RE     = re.compile(r"[\u200B-\u200D\uFEFF]")
+ZERO_WIDTHS_RE    = re.compile(r"[\u200B-\u200D\uFEFF]")
 
 def preclean_cell(text: str) -> str:
     t = ZERO_WIDTHS_RE.sub("", str(text))
@@ -340,7 +361,7 @@ def summarize_dimension(df: pd.DataFrame, col: str, pretty: str):
 from googleapiclient.discovery import build as gbuild
 from googleapiclient.errors import HttpError
 
-# YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()  # boşsa link akışı çalışmaz
+# YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()
 YOUTUBE_API_KEY = "your_api_key"
 SLEEP_BETWEEN_CALLS = 0.05
 
@@ -470,7 +491,6 @@ def choose_text_column(df: pd.DataFrame) -> Optional[str]:
     for c in TEXT_CANDIDATES:
         if c in df.columns:
             return c
-    # fallback: en uzun object sütunu
     obj_cols = [c for c in df.columns if df[c].dtype == "object"]
     if not obj_cols:
         return None
@@ -500,9 +520,7 @@ def _maybe_label_with_model(df: pd.DataFrame, text_col: Optional[str]) -> pd.Dat
 def _summarize_like_analyze(df: pd.DataFrame) -> Dict[str, Any]:
     payload: Dict[str, Any] = {}
     text_col = choose_text_column(df)
-    present_label_cols = [c for c in LABEL_COLS if c in df.columns]
 
-    # Özetler
     results = {}
     for col, pretty in [
         ("sentiment", "Duygu Etiketleri"),
@@ -515,7 +533,6 @@ def _summarize_like_analyze(df: pd.DataFrame) -> Dict[str, Any]:
             if r is not None:
                 results[col] = r
 
-    # Kayıtlar
     records = []
     if text_col:
         cols = [text_col] + [c for c in LABEL_COLS if c in df.columns]
@@ -564,21 +581,16 @@ def analyze():
                 meta = _get_video_meta(yt, vid)
                 rows = _fetch_all_comments(yt, vid)
 
-                # DF
                 df = pd.DataFrame(rows)
                 if "text" not in df.columns:
                     df.rename(columns={"Yorum Metni": "text"}, inplace=True)
                     if "text" not in df.columns:
                         df["text"] = ""
 
-                # video meta her satıra
                 df.insert(0, "videoChannelTitle", meta["channelTitle"])
                 df.insert(1, "videoTitle", meta["videoTitle"])
                 df.insert(2, "videoId", meta["videoId"])
 
-                # >>> CSV ADIMI KALDIRILDI <<<
-
-                # Model etiketleme + özet
                 text_col   = choose_text_column(df)
                 df_labeled = _maybe_label_with_model(df, text_col)
                 payload    = _summarize_like_analyze(df_labeled)
@@ -595,8 +607,6 @@ def analyze():
         try:
             f = request.files["file"]
             df = read_uploaded_file_to_df(f)
-
-            # Text kolonu belirle ve model etiketleme yap
             text_col = choose_text_column(df)
             if not text_col:
                 obj_cols = [c for c in df.columns if df[c].dtype == "object"]
@@ -612,6 +622,137 @@ def analyze():
             return jsonify({"error": f"Dosya analizi hatası: {e}"}), 400
 
     return jsonify({"error": "Geçersiz istek. JSON {url: ...} veya multipart/form-data ile dosya yükleyin."}), 400
+
+# ==========================
+# Dilekçe: şablon + PDF
+# ==========================
+def render_petition_text(payload: dict) -> str:
+    t = env.get_template("dilekce_multi.j2")
+    data = dict(payload)
+    data["bugun_tarih"] = datetime.now().strftime("%d.%m.%Y")
+    return t.render(**data)
+
+def text_to_pdf_bytes(text: str) -> bytes:
+    """
+    Düz metni DejaVu font ile A4'e basar.
+    Otomatik olarak font boyutu / satır aralığını küçültüp tek sayfaya sığdırır.
+    Başlık satırları (KONU:, AÇIKLAMALAR:, İLGİLİ MEVZUAT:, DELİL:, SONUÇ ve TALEP:) bold basılır.
+    """
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    page_w, page_h = A4
+
+    # Kenar boşlukları (biraz dar)
+    margin = 1.5 * cm
+    left   = margin
+    right  = page_w - margin
+    top    = page_h - margin
+    bottom = margin
+    usable_w = right - left
+    usable_h = top - bottom
+
+    base_size    = 11.0
+    heading_size = 12.0
+    min_size     = 8.0
+    para_space   = 3
+
+    HEAD_PREFIXES = ("KONU:", "AÇIKLAMALAR:", "İLGİLİ MEVZUAT:", "DELİL:", "SONUÇ ve TALEP:")
+
+    def wrap_by_width(text_line: str, font_name: str, font_size: float) -> list[str]:
+        words = (text_line or "").split(" ")
+        lines, cur = [], ""
+        for w in words:
+            test = (cur + (" " if cur else "") + w).strip()
+            fname = font_name if font_name in pdfmetrics.getRegisteredFontNames() else "Helvetica"
+            if pdfmetrics.stringWidth(test, fname, font_size) <= usable_w:
+                cur = test
+            else:
+                lines.append(cur)
+                cur = w
+        lines.append(cur)
+        return lines if lines != [""] else [""]
+
+    paragraphs = [block.rstrip() for block in text.split("\n")]
+
+    size = base_size
+    while size >= min_size:
+        total_height = 0
+        for p in paragraphs:
+            is_heading = p.startswith(HEAD_PREFIXES)
+            f_name = "DejaVu-Bold" if (is_heading and "DejaVu-Bold" in pdfmetrics.getRegisteredFontNames()) else "DejaVu"
+            f_size = heading_size if is_heading else size
+            leading = f_size + 3
+            wrapped = wrap_by_width(p, f_name, f_size)
+            total_height += len(wrapped) * leading + para_space
+        if total_height <= usable_h:
+            break
+        size -= 0.5
+        heading_size = max(size + 1, size)
+
+    y = top
+    for p in paragraphs:
+        is_heading = p.startswith(HEAD_PREFIXES)
+        f_name = "DejaVu-Bold" if (is_heading and "DejaVu-Bold" in pdfmetrics.getRegisteredFontNames()) else "DejaVu"
+        f_size = heading_size if is_heading else size
+        leading = f_size + 3
+        try:
+            c.setFont(f_name, f_size)
+        except:
+            c.setFont("Helvetica-Bold" if is_heading else "Helvetica", f_size)
+
+        for line in wrap_by_width(p, f_name, f_size):
+            if y - leading < bottom:
+                c.showPage()
+                y = top
+                try:
+                    c.setFont(f_name, f_size)
+                except:
+                    c.setFont("Helvetica-Bold" if is_heading else "Helvetica", f_size)
+            c.drawString(left, y, line)
+            y -= leading
+        y -= para_space
+
+    c.save()
+    return buf.getvalue()
+
+@app.route("/petition", methods=["POST", "OPTIONS"])
+@cross_origin()
+def petition():
+    if request.method == "OPTIONS":
+        return "", 200
+
+    try:
+        j = request.get_json(force=True) or {}
+        ad_soyad = (j.get("ad_soyad") or "").strip()
+        if not ad_soyad:
+            return jsonify({"error": "ad_soyad boş olamaz"}), 400
+
+        labels = j.get("labels") or []
+        if not isinstance(labels, list) or not labels:
+            return jsonify({"error": "labels boş olamaz"}), 400
+
+        payload = {
+            "ad_soyad": ad_soyad,
+            "labels": labels,
+            "platform": j.get("platform") or "Sosyal Medya",
+            "tarih": j.get("tarih") or datetime.now().strftime("%d.%m.%Y"),
+            "yorum": j.get("yorum") or "",
+            "yorum_linki": j.get("yorum_linki") or "",
+        }
+
+        text_out  = render_petition_text(payload)
+        pdf_bytes = text_to_pdf_bytes(text_out)
+
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"dilekce_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+        )
+    except Exception as e:
+        return jsonify({"error": f"petition hatası: {e}"}), 500
+
+
 
 # ==========================
 # Main
