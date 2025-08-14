@@ -314,7 +314,96 @@ if (!stored) {
 
       // Bu noktadan sonra yönlendirme / modal açma / template doldurma yapılabilir
       // Ör: window.location.href = `petition.html?i=${idx}`;
-      alert("Dilekçe başlatılacak.\n\nMetin: " + (row?.[TEXT_COL] || ""));
+      // Dilekçe butonu tıklaması (event delegation)
+if (rowsBody) {
+  rowsBody.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".btn-petition");
+    if (!btn) return;
+    if (btn.disabled) return;
+
+    const idx = parseInt(btn.dataset.idx, 10);
+
+    // Şu anki filtre sonucundaki gerçek satırı al
+    const row = currentFiltered[idx];
+    if (!row) return;
+
+    // 1) Kullanıcıdan ad soyad al
+    const adSoyad = prompt("Dilekçe sahibi Ad Soyad:");
+    if (!adSoyad) return;
+
+    // 2) Backend'e göndereceğimiz gövdeyi hazırla
+    // - Text kolonu tespiti zaten üstteki TEXT_COL ile yapılmıştı
+    const textCol = TEXT_COL;
+    const yorum = (row[textCol] || "").toString();
+
+    // Hücreleri JSON/virgül/basit dizi gibi farklı formatlardan normalize eden yardımcı
+    const expandCell = (raw) => {
+      if (raw == null) return [];
+      let t = String(raw).trim();
+      if (!t) return [];
+      try {
+        const obj = JSON.parse(t);
+        if (Array.isArray(obj)) return obj.map(String);
+        if (obj && Array.isArray(obj.choices)) return obj.choices.map(String);
+        if (typeof obj === "string") t = obj;
+      } catch (_) {}
+      let m = t.match(/choices\s*:\s*\[([^\]]+)\]/i) || t.match(/\[([^\]]+)\]/);
+      if (m) {
+        return m[1].split(",").map(x => x.replace(/^['"]|['"]$/g, "").trim()).filter(Boolean);
+      }
+      return t.split(",").map(x => x.trim()).filter(Boolean);
+    };
+
+    // Hukuki etiketleri labels olarak gönderelim (şablon bunları yazıyor)
+    const labels = expandCell(row.legal || "");
+
+    // İsteğe bağlı: video analizinden geldiysen meta içinde platform, tarih, link olabilir
+    const stored = sessionStorage.getItem("analysisResults");
+    const payloadAll = stored ? JSON.parse(stored) : {};
+    const videoMeta  = payloadAll?.video_meta || null;
+
+    const platform    = videoMeta ? "YouTube" : "Sosyal Medya";
+    const tarih       = videoMeta?.publishedAt?.slice(0, 10) || new Date().toLocaleDateString("tr-TR");
+    const yorum_linki = videoMeta ? `https://www.youtube.com/watch?v=${videoMeta.videoId}` : "";
+
+    const body = {
+      ad_soyad: adSoyad,
+      labels,
+      platform,
+      tarih,
+      yorum,
+      yorum_linki
+    };
+
+    // 3) PDF’i backend’den iste
+    try {
+      const resp = await fetch("http://127.0.0.1:5000/petition", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        alert("PDF oluşturulamadı: " + (err?.error || resp.status));
+        return;
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+
+      // 4) İndir
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dilekce_${idx + 1}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("İstek hatası: " + err);
+    }
+  });
+}
+;
     });
   }
 
