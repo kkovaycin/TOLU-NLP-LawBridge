@@ -7,7 +7,7 @@
   <title>Analiz Sonuçları - LawBridge</title>
 
   <link rel="stylesheet" href="../styles/global.css" />
-  <link rel="stylesheet" href="../styles/guest.css" />
+  <link rel="stylesheet" href="../styles/guest-analysis.css" />
   <style>
     .results-header {
       text-align: center;
@@ -164,30 +164,34 @@
         grid-template-columns: 1fr;
       }
     }
+
+    .dd-item:hover {
+      background: transparent !important;
+    }
   </style>
 </head>
 
 <body>
   <!-- HEADER -->
-<header class="header">
-  <a href="#top" class="brand-name">LawBridge</a>
+  <header class="header">
+    <a href="#top" class="brand-name">LawBridge</a>
 
-  <!-- Hamburger icon (sadece küçük ekranda görünecek) -->
-  <div class="hamburger" id="hamburger">
-    <span></span>
-    <span></span>
-    <span></span>
-  </div>
+    <!-- Hamburger icon (sadece küçük ekranda görünecek) -->
+    <div class="hamburger" id="hamburger">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
 
-  <!-- Navigation links -->
-  <nav class="nav" id="nav">
-    <a href="#about">Hakkımızda</a>
-    <a href="#team">Ekipten Mesaj</a>
-    <a href="guest-options.html">Analiz Et</a>
-    <a href="login.html" onclick="localStorage.setItem('registerSource', 'menu')">Giriş / Misafir</a>
+    <!-- Navigation links -->
+    <nav class="nav" id="nav">
+      <a href="#about">Hakkımızda</a>
+      <a href="#team">Ekipten Mesaj</a>
+      <a href="guest-options.html">Analiz Et</a>
+      <a href="login.html" onclick="localStorage.setItem('registerSource', 'menu')">Giriş / Misafir</a>
 
-  </nav>
-</header>
+    </nav>
+  </header>
   <div class="backbar">
     <button class="btn-outline" onclick="window.location.href='./guest-options.html'">← Yeni Analiz</button>
     <span class="kv" id="meta"></span>
@@ -251,6 +255,32 @@
         <button id="nextPage" class="btn-outline">Sonraki</button>
       </div>
     </div>
+    <!-- Dilekçe Modal (PDF önizlemeli) -->
+    <div id="petitionModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="petitionTitle">
+      <div class="modal">
+        <button class="modal-close" id="petitionClose" aria-label="Kapat">×</button>
+
+        <h3 id="petitionTitle">Dilekçe Oluştur</h3>
+
+        <!-- Orta alan: PDF önizlemesi + Ad Soyad girişi -->
+        <div class="modal-body">
+          <div class="modal-preview">
+            <!-- JS buraya blob URL veriyor -->
+            <iframe id="petitionPreview" class="pdf-frame" title="Dilekçe Önizleme"></iframe>
+          </div>
+
+          <label class="modal-label" for="petitionName">Ad Soyad</label>
+          <input id="petitionName" type="text" placeholder="Ad Soyad" />
+        </div>
+
+        <!-- Alt butonlar -->
+        <div class="modal-footer">
+          <button class="btn-outline" id="petitionCancel">Vazgeç</button>
+          <button class="btn-primary" id="petitionSubmit">PDF OLUŞTUR</button>
+        </div>
+      </div>
+    </div>
+
   </section>
 
   <footer class="footer">

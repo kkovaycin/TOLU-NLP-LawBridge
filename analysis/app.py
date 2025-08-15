@@ -28,59 +28,37 @@ from reportlab.pdfbase.ttfonts import TTFont
 from datetime import datetime
 
 # ==========================
-# MODELLER (Hugging Face)
+# MODEL (Hugging Face)
 # ==========================
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip() or "your_token"
-
-# Modeller (env ile override edilebilir)
-MODEL_LEGAL     = os.getenv("MODEL_LEGAL",     "lawbridge/lawbridge-legal-model")
-MODEL_INTENT    = os.getenv("MODEL_INTENT",    "lawbridge/intent-berturk")
-MODEL_SENTIMENT = os.getenv("MODEL_SENTIMENT", "lawbridge/sentiment-berturk")
-
-# Maks. uzunluklar ve eşikler
-LEGAL_MAXLEN  = int(os.getenv("LEGAL_MAXLEN",  "128"))
-INTENT_MAXLEN = int(os.getenv("INTENT_MAXLEN", "128"))
-SENT_MAXLEN   = int(os.getenv("SENT_MAXLEN",   "128"))
-
-LEGAL_THRESH  = float(os.getenv("LEGAL_THRESH",  "0.45"))
-INTENT_THRESH = float(os.getenv("INTENT_THRESH", "0.45"))
-SENT_THRESH   = float(os.getenv("SENT_THRESH",   "0.45"))
-
-MAX_LABELS_PER_DIM = int(os.getenv("MAX_LABELS_PER_DIM", "5"))
+MODEL_LEGAL = "lawbridge/lawbridge-legal-model"
 
 def _hf_kwargs():
     return {"token": HF_TOKEN} if HF_TOKEN else {}
 
-# Pipelinelar
-tokenizer_legal   = AutoTokenizer.from_pretrained(MODEL_LEGAL, **_hf_kwargs())
-model_legal       = AutoModelForSequenceClassification.from_pretrained(MODEL_LEGAL, **_hf_kwargs())
-clf_legal         = pipeline("text-classification", model=model_legal,   tokenizer=tokenizer_legal)
+tokenizer_legal = AutoTokenizer.from_pretrained(MODEL_LEGAL, **_hf_kwargs())
+model_legal     = AutoModelForSequenceClassification.from_pretrained(MODEL_LEGAL, **_hf_kwargs())
+LEGAL_MAXLEN = int(os.getenv("LEGAL_MAXLEN", "128"))
+clf_legal = pipeline("text-classification", model=model_legal, tokenizer=tokenizer_legal)
 
-tokenizer_intent  = AutoTokenizer.from_pretrained(MODEL_INTENT, **_hf_kwargs())
-model_intent      = AutoModelForSequenceClassification.from_pretrained(MODEL_INTENT, **_hf_kwargs())
-clf_intent        = pipeline("text-classification", model=model_intent,  tokenizer=tokenizer_intent)
-
-tokenizer_sent    = AutoTokenizer.from_pretrained(MODEL_SENTIMENT, **_hf_kwargs())
-model_sent        = AutoModelForSequenceClassification.from_pretrained(MODEL_SENTIMENT, **_hf_kwargs())
-clf_sentiment     = pipeline("text-classification", model=model_sent,    tokenizer=tokenizer_sent)
-
-def classify_multi(clf, text: str, max_length: int, threshold: float, max_labels: int) -> list[str]:
+def classify_legal_multi(text: str, threshold: float = 0.45, max_labels: int = 5) -> list[str]:
     """
-    Çoklu etiket: tüm skorları al, eşik üzerindekileri sırayla seç.
-    Hiçbiri geçmezse en yüksek skoru döndür. Tekilleştirerek döndürür.
+    Çoklu etiket: tüm skorları al, 'threshold' üzerindekileri sırayla seç.
+    Hiçbiri geçmezse en yüksek skorlu 1 etiketi döndür.
+    'Uygunsuzluk Yok' başka bir etiketle birlikte asla dönmez.
     """
-    if clf is None or not text or not str(text).strip():
+    if not text or not str(text).strip():
         return []
     try:
-        out = clf(
+        out = clf_legal(
             str(text),
             return_all_scores=True,
             function_to_apply="sigmoid",
             top_k=None,
             truncation=True,
-            max_length=max_length
+            max_length=LEGAL_MAXLEN
         )
         if isinstance(out, list) and out and isinstance(out[0], list):
             out = out[0]
@@ -91,16 +69,75 @@ def classify_multi(clf, text: str, max_length: int, threshold: float, max_labels
         picked = [d["label"] for d in out if d.get("score", 0.0) >= threshold]
         if not picked and out:
             picked = [out[0]["label"]]
+
+        NONE_LABEL = "Uygunsuzluk Yok"
+        if picked and any(lbl != NONE_LABEL for lbl in picked) and NONE_LABEL in picked:
+            picked = [lbl for lbl in picked if lbl != NONE_LABEL]
+
         if max_labels:
             picked = picked[:max_labels]
+
         return list(dict.fromkeys(picked))
     except Exception as e:
-        print("[MULTI ERROR]", e)
+        print("[LEGAL MULTI ERROR]", e)
         return []
 
 # ---------------------------------------
-# Görsel özet/kanonikleştirme için sözlükler
+# Hukukî etiketten diğerlerini türetme
 # ---------------------------------------
+LEGAL_TO_INTENT = {
+    "Hakaret – TCK m.125": "Hakaret/Aşağılama",
+    "Kamu Görevlisine Hakaret – TCK m.125/3": "Hakaret/Aşağılama",
+    "Tehdit – TCK m.106": "Tehdit",
+    "Taciz – TCK m.105, 123": "Taciz",
+    "Nefret/Ayrımcılık – TCK m.122": "Kamuoyu Bilgilendirmesi/Uyarı",
+    "Veri İhlali – KVKK m.12, TCK m.136": "Bilgi/Açıklama Talebi",
+    "Dolandırıcılık/Sahte Kampanya – TCK m.157": "Dolandırıcılık/Sahte Kampanya",
+    "Ayıplı Mal/Hizmet – TKHK m.8, 11": "Şikayet/Memnuniyetsizlik",
+    "Toplumu Kin ve Düşmanlığa Tahrik – TCK m.216": "Kamuoyu Bilgilendirmesi/Uyarı",
+    "Uygunsuzluk Yok": "Kişisel Yorum/Gözlem",
+}
+LEGAL_TO_SENTIMENT = { "Uygunsuzluk Yok": "Nötr" }
+LEGAL_TO_PURITY = {
+    "Hakaret – TCK m.125": "bad_faith",
+    "Kamu Görevlisine Hakaret – TCK m.125/3": "bad_faith",
+    "Tehdit – TCK m.106": "bad_faith",
+    "Taciz – TCK m.105, 123": "bad_faith",
+}
+DEFAULT_SENTIMENT = "Olumsuz"
+DEFAULT_PURITY    = "uncertain"
+
+# ==========================
+# Uygulama
+# ==========================
+app = Flask(__name__)
+CORS(app)
+
+# --- DejaVu fontlarını yükle (Türkçe için şart) ---
+BASE_DIR  = Path(__file__).resolve().parent                  # .../analysis
+FONTS_DIR = BASE_DIR.parent / "assets" / "fonts" / "dejavu-sans"
+try:
+    pdfmetrics.registerFont(TTFont("DejaVu",      str(FONTS_DIR / "DejaVuSans.ttf")))
+    pdfmetrics.registerFont(TTFont("DejaVu-Bold", str(FONTS_DIR / "DejaVuSans-Bold.ttf")))
+    print("Fontlar yüklendi:", pdfmetrics.getRegisteredFontNames())
+except Exception as e:
+    print("FONT register hatası:", e)
+
+# --- Jinja template config (legal complaint template/ dizini proje kökünde) ---
+TEMPLATE_DIR = BASE_DIR.parent / "legal complaint template"
+env = Environment(
+    loader=FileSystemLoader(str(TEMPLATE_DIR)),
+    autoescape=select_autoescape(enabled_extensions=("j2",))
+)
+
+TOP_N = 8
+TEXT_CANDIDATES = ["text", "yorum", "comment", "content", "tweet", "message", "body"]
+LABEL_COLS = ["sentiment", "intent", "legal", "intent_purity"]
+MAX_RECORDS = 2000
+
+# ==========================
+# Yardımcılar (genel)
+# ==========================
 def strip_accents(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
@@ -109,10 +146,60 @@ def keyify(s: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return re.sub(r"[^\w]+", "", s)
 
+CHOICES_PREFIX_RE = re.compile(r"(?i)\bchoices\s*[:：﹕꞉︰⦂⸬\-—–]*\s*")
+ZERO_WIDTHS_RE    = re.compile(r"[\u200B-\u200D\uFEFF]")
+
+def preclean_cell(text: str) -> str:
+    t = ZERO_WIDTHS_RE.sub("", str(text))
+    t = CHOICES_PREFIX_RE.sub("", t)
+    t = re.sub(r"(?i)\bm\.?\s*(\d+)\s*,\s*(\d+)\b", r"m.\1 \2", t)
+    t = re.sub(r"[;|]+", ",", t)
+    t = re.sub(r",\s*,", ",", t)
+    return t
+
+def _expand_cell(text: str) -> list[str]:
+    if text is None:
+        return []
+    raw = str(text).strip()
+    if raw == "" or raw.lower() in {"nan", "none"}:
+        return []
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict) and "choices" in obj and isinstance(obj["choices"], list):
+            return [str(x) for x in obj["choices"]]
+        if isinstance(obj, list):
+            return [str(x) for x in obj]
+        if isinstance(obj, str):
+            raw = obj
+    except Exception:
+        pass
+    m = re.search(r'choices\s*:\s*\[([^\]]+)\]', raw, flags=re.I)
+    if m:
+        inner = m.group(1)
+        return [s.strip().strip('\'"') for s in inner.split(",") if s.strip()]
+    m2 = re.search(r'\[([^\]]+)\]', raw)
+    if m2:
+        inner = m2.group(1)
+        return [s.strip().strip('\'"') for s in inner.split(",") if s.strip()]
+    t = preclean_cell(raw)
+    return [p.strip() for p in t.split(",") if p.strip()]
+
+def explode_multilabel(series: pd.Series) -> pd.Series:
+    s = series.dropna().map(_expand_cell)
+    s = pd.Series([item for sub in s for item in (sub if isinstance(sub, list) else [sub])])
+    if s.empty:
+        return s
+    s = s.astype(str).str.strip()
+    s = s[(s != "") & s.str.contains(r"[A-Za-z0-9ÇŞĞÜÖİçşğüöı]", regex=True)]
+    return s
+
+# ---- Kanonik sözlükler (görsel/özet için) ----
 SENTIMENT_CANON = {
     "Öfke/Kızgınlık": ["Öfke / Kızgınlık","Öfke","Kızgınlık"],
-    "Üzüntü/Endişe": ["Üzüntü / Endişe","Üzüntü","Endişe"],
+    "Üzüntü/Keder": ["Üzüntü / Keder","Üzüntü","Keder"],
     "Hayal Kırıklığı": ["Hayal Kırıklığı"],
+    "Endişe": ["Endişe","Kaygı"],
+    "Şaşkınlık": ["Şaşkınlık"],
     "Nötr": ["Nötr","Neutral"],
     "Olumlu": ["Olumlu","Pozitif","Positive"],
     "Olumsuz": ["Olumsuz","Negatif","Negative"],
@@ -122,7 +209,9 @@ INTENT_CANON = {
     "Şikayet/Memnuniyetsizlik": ["Şikayet / Memnuniyetsizlik","Şikayet","Memnuniyetsizlik"],
     "Kamuoyu Bilgilendirmesi/Uyarı": ["Kamuoyu Bilgilendirmesi / Uyarı","Kamuoyu Bilgilendirmesi","Uyarı"],
     "Kişisel Yorum/Gözlem": ["Kişisel Yorum / Gözlem","Kişisel Yorum","Gözlem"],
-    "Talep": ["Talep"],
+    "Öneri/Beklenti/İstek": ["Öneri / Beklenti / İstek","Öneri","Beklenti","İstek"],
+    "Bilgi/Açıklama Talebi": ["Bilgi / Açıklama Talebi","Bilgi Talebi","Açıklama Talebi","Bilgi","Açıklama"],
+    "Destek/Yardım Talebi": ["Destek / Yardım Talebi","Destek Talebi","Yardım Talebi","Destek","Yardım"],
     "Hakaret/Aşağılama": ["Hakaret / Aşağılama","Hakaret","Aşağılama"],
     "Tehdit": ["Tehdit"],
     "Taciz": ["Taciz"],
@@ -178,101 +267,6 @@ def canonicalize(token: str, dimension: str) -> str:
     k = keyify(t)
     k = re.sub(r"^(choices|intent|sentiment|legal|faith|purity)\s*", "", k)
     return ALIAS.get(dimension, {}).get(k, t)
-
-# Purity tek değer (yalnızca legal'den)
-DEFAULT_SENTIMENT = "Olumsuz"
-DEFAULT_PURITY    = "uncertain"
-PURITY_PRIORITY   = ["bad_faith", "good_faith", "uncertain"]
-LEGAL_TO_PURITY = {
-    "Hakaret – TCK m.125": "bad_faith",
-    "Kamu Görevlisine Hakaret – TCK m.125/3": "bad_faith",
-    "Tehdit – TCK m.106": "bad_faith",
-    "Taciz – TCK m.105, 123": "bad_faith",
-}
-def purity_from_legal(legal_labels: list[str]) -> str:
-    vals = [LEGAL_TO_PURITY.get(lg, DEFAULT_PURITY) for lg in (legal_labels or [])]
-    for p in PURITY_PRIORITY:
-        if p in vals:
-            return p
-    return DEFAULT_PURITY
-
-# ==========================
-# Uygulama
-# ==========================
-app = Flask(__name__)
-CORS(app)
-
-# --- DejaVu fontlarını yükle (Türkçe için şart) ---
-BASE_DIR  = Path(__file__).resolve().parent
-FONTS_DIR = BASE_DIR.parent / "assets" / "fonts" / "dejavu-sans"
-try:
-    pdfmetrics.registerFont(TTFont("DejaVu",      str(FONTS_DIR / "DejaVuSans.ttf")))
-    pdfmetrics.registerFont(TTFont("DejaVu-Bold", str(FONTS_DIR / "DejaVuSans-Bold.ttf")))
-    print("Fontlar yüklendi:", pdfmetrics.getRegisteredFontNames())
-except Exception as e:
-    print("FONT register hatası:", e)
-
-# --- Jinja template config ---
-TEMPLATE_DIR = BASE_DIR.parent / "legal complaint template"
-env = Environment(
-    loader=FileSystemLoader(str(TEMPLATE_DIR)),
-    autoescape=select_autoescape(enabled_extensions=("j2",))
-)
-
-TOP_N = 8
-TEXT_CANDIDATES = ["text", "yorum", "comment", "content", "tweet", "message", "body"]
-LABEL_COLS = ["sentiment", "intent", "legal", "intent_purity"]
-MAX_RECORDS = 2000
-
-# ==========================
-# Çoklu etiket hücre yardımcıları (görselleştirme)
-# ==========================
-CHOICES_PREFIX_RE = re.compile(r"(?i)\bchoices\s*[:：﹕꞉︰⦂⸬\-—–]*\s*")
-ZERO_WIDTHS_RE    = re.compile(r"[\u200B-\u200D\uFEFF]")
-
-def preclean_cell(text: str) -> str:
-    t = ZERO_WIDTHS_RE.sub("", str(text))
-    t = CHOICES_PREFIX_RE.sub("", t)
-    t = re.sub(r"(?i)\bm\.?\s*(\d+)\s*,\s*(\d+)\b", r"m.\1 \2", t)
-    t = re.sub(r"[;|]+", ",", t)
-    t = re.sub(r",\s*,", ",", t)
-    return t
-
-def _expand_cell(text: str) -> list[str]:
-    if text is None:
-        return []
-    raw = str(text).strip()
-    if raw == "" or raw.lower() in {"nan", "none"}:
-        return []
-    try:
-        obj = json.loads(raw)
-        if isinstance(obj, dict) and "choices" in obj and isinstance(obj["choices"], list):
-            return [str(x) for x in obj["choices"]]
-        if isinstance(obj, list):
-            return [str(x) for x in obj]
-        if isinstance(obj, str):
-            raw = obj
-    except Exception:
-        pass
-    m = re.search(r'choices\s*:\s*\[([^\]]+)\]', raw, flags=re.I)
-    if m:
-        inner = m.group(1)
-        return [s.strip().strip('\'"') for s in inner.split(",") if s.strip()]
-    m2 = re.search(r'\[([^\]]+)\]', raw)
-    if m2:
-        inner = m2.group(1)
-        return [s.strip().strip('\'"') for s in inner.split(",") if s.strip()]
-    t = preclean_cell(raw)
-    return [p.strip() for p in t.split(",") if p.strip()]
-
-def explode_multilabel(series: pd.Series) -> pd.Series:
-    s = series.dropna().map(_expand_cell)
-    s = pd.Series([item for sub in s for item in (sub if isinstance(sub, list) else [sub])])
-    if s.empty:
-        return s
-    s = s.astype(str).str.strip()
-    s = s[(s != "") & s.str.contains(r"[A-Za-z0-9ÇŞĞÜÖİçşğüöı]", regex=True)]
-    return s
 
 def _bar_chart_base64(counts: pd.Series, title: str) -> str | None:
     if counts is None or counts.empty:
@@ -331,7 +325,7 @@ def _donut_topn_base64(counts: pd.Series, title: str, n: int = 8, exclude=None) 
     ax.set_title(f"{title} – En Çok {min(n, len(counts))} Etiket (+Diğer)")
     ax.axis('equal')
     legend_labels = [f"{str(name).replace('%','%%')} ({int(val)})"
-                     for name, val in zip(top.index, top.values)]
+                 for name, val in zip(top.index, top.values)]
     ax.legend(wedges, legend_labels, loc="center left", bbox_to_anchor=(1, 0.5),
               frameon=False, title="Etiketler")
     buf = BytesIO()
@@ -367,7 +361,8 @@ def summarize_dimension(df: pd.DataFrame, col: str, pretty: str):
 from googleapiclient.discovery import build as gbuild
 from googleapiclient.errors import HttpError
 
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "your_api_key").strip()
+# YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()
+YOUTUBE_API_KEY = "your_api_key"
 SLEEP_BETWEEN_CALLS = 0.05
 
 def _extract_video_id(url_or_id: str) -> Optional[str]:
@@ -505,40 +500,20 @@ def choose_text_column(df: pd.DataFrame) -> Optional[str]:
 def _maybe_label_with_model(df: pd.DataFrame, text_col: Optional[str]) -> pd.DataFrame:
     if not text_col:
         return df
-
     sentiments, intents, legals, purities = [], [], [], []
     for t in df[text_col].fillna("").tolist():
-        # 1) Legal
-        legal_list = classify_multi(clf_legal, t, LEGAL_MAXLEN, LEGAL_THRESH, MAX_LABELS_PER_DIM)
-        if not legal_list:
-            legal_list = ["Uygunsuzluk Yok"]
-
-        # 2) Intent (kendi modeli)
-        intent_list = classify_multi(clf_intent, t, INTENT_MAXLEN, INTENT_THRESH, MAX_LABELS_PER_DIM)
-        if not intent_list:
-            intent_list = ["Kişisel Yorum/Gözlem"]
-
-        # 3) Sentiment (kendi modeli)
-        sent_list = classify_multi(clf_sentiment, t, SENT_MAXLEN, SENT_THRESH, MAX_LABELS_PER_DIM)
-        if not sent_list:
-            sent_list = [DEFAULT_SENTIMENT]
-
-        # 4) Purity: tek değer (yalnızca legal'den)
-        purity = purity_from_legal(legal_list)
-
-        # JSON alanları
+        legal_list = classify_legal_multi(t, threshold=0.45, max_labels=5) or ["Uygunsuzluk Yok"]
+        intent_set = {LEGAL_TO_INTENT.get(lg, "Kişisel Yorum/Gözlem") for lg in legal_list}
+        sentiment_set = {LEGAL_TO_SENTIMENT.get(lg, DEFAULT_SENTIMENT) for lg in legal_list}
+        purity_set = {LEGAL_TO_PURITY.get(lg, DEFAULT_PURITY) for lg in legal_list}
         legals.append(json.dumps({"choices": list(dict.fromkeys(legal_list))}, ensure_ascii=False))
-        intents.append(json.dumps({"choices": list(dict.fromkeys(intent_list))}, ensure_ascii=False))
-        sentiments.append(json.dumps({"choices": list(dict.fromkeys(sent_list))}, ensure_ascii=False))
-        purities.append(json.dumps({"choices": [purity]}, ensure_ascii=False))
-
+        intents.append(json.dumps({"choices": list(dict.fromkeys(list(intent_set)))}, ensure_ascii=False))
+        sentiments.append(json.dumps({"choices": list(dict.fromkeys(list(sentiment_set)))}, ensure_ascii=False))
+        purities.append(json.dumps({"choices": list(dict.fromkeys(list(purity_set)))}, ensure_ascii=False))
     df = df.copy()
-    # Güvenlik kontrolü (geliştirme için):
-    # assert len(sentiments) == len(intents) == len(legals) == len(purities) == len(df), "label list lengths mismatch"
-
-    df["sentiment"]     = sentiments
-    df["intent"]        = intents
-    df["legal"]         = legals
+    df["sentiment"] = sentiments
+    df["intent"] = intents
+    df["legal"] = legals
     df["intent_purity"] = purities
     return df
 
@@ -776,6 +751,8 @@ def petition():
         )
     except Exception as e:
         return jsonify({"error": f"petition hatası: {e}"}), 500
+
+
 
 # ==========================
 # Main

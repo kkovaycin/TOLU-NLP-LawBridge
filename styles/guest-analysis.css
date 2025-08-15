@@ -1,0 +1,234 @@
+/* === SAYFA TEMELİ === */
+:root{
+  --bg1:#DDDDDD;
+  --bg2:#EEEEEE;
+  --txt:#333;
+  --muted:#666;
+  --ink:#222;
+  --card:#F9F9F9;
+  --border:#eee;
+  --line:#f3f3f3;
+  --accent:#373A40;
+  --accent-2:#1f1f1f;
+  --chip:#e9edf3;
+}
+
+*{box-sizing:border-box}
+body{
+  background: linear-gradient(to bottom, var(--bg1), var(--bg2));
+  font-family: 'Roboto', sans-serif;
+  color: var(--txt);
+  margin:0;
+}
+
+/* üst bar (geri + meta) */
+.backbar{
+  max-width:1100px;
+  margin:5rem auto 1rem;
+  padding:0 1rem;
+  display:flex;
+  gap:.75rem;
+  align-items:center;
+}
+.kv{font-size:.95rem;color:#555}
+
+/* başlık kısmı */
+.results-header{
+  max-width:1100px;
+  margin:0 auto 1rem;
+  padding:0 1rem;
+  text-align:left;
+  opacity:0;
+  animation:fadeInTop .8s ease forwards;
+}
+.results-header h1{margin:.25rem 0 0.25rem;font-size:2rem}
+.results-header p{margin:0;color:#555}
+
+/* grafik kartlarını tutan grid */
+.results-grid{
+  max-width:1100px;
+  margin:1rem auto 1.25rem;
+  padding:0 1rem;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:1rem;
+}
+
+/* kart genel */
+.result-card{
+  background:var(--card);
+  border:1px solid rgba(255,255,255,.25);
+  border-radius:16px;
+  box-shadow:0 8px 24px rgba(31,38,135,.18);
+  padding:1rem 1rem 1.1rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.result-card h3{
+  margin:.25rem 0 .5rem;
+  font-size:1.1rem;
+  display:flex;align-items:center;justify-content:space-between;
+}
+
+/* grafik görselleri + animasyon */
+.chart-img{
+  width:100%;
+  height:auto;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:white;
+}
+.chart-slide{opacity:0;animation:fadeInUp .6s ease .1s forwards}
+.slide-in{animation:fadeInUp .5s ease}
+
+/* grafikleri bar/pie arasında değiştir butonu */
+.toggle-btn{
+  border:none;cursor:pointer;
+  padding:.35rem .6rem;border-radius:8px;
+  background:var(--chip);color:#333;
+  font-size:.9rem;transition:transform .15s ease;
+}
+.toggle-btn:hover{transform:translateY(-1px)}
+
+/* filtre paneli */
+#filter-panel{grid-column:1/-1;margin-top:.5rem}
+.filter-grid{
+  display:grid;gap:.75rem;margin-bottom:.75rem;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+}
+.filters-top{
+  display:flex;gap:.5rem;align-items:center;justify-content:space-between;
+}
+#searchBox{
+  flex:1;
+  padding:.6rem .75rem;border:1px solid var(--border);border-radius:10px;
+  background:white;
+}
+
+/* dropdown bileşeni */
+.filter-dd{position:relative}
+.dd-btn{
+  width:100%;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:.5rem;
+  padding:.55rem .7rem;border:1px solid var(--border);border-radius:10px;
+  background:white;cursor:pointer
+}
+.dd-title{font-size:.95rem}
+.dd-chip{
+  min-width:.6rem;min-height:.6rem;border-radius:999px;background:#cfd7e6
+}
+.dd-menu{
+  position:absolute;z-index:20;left:0;right:0;top:calc(100% + 6px);
+  background:white;border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,.08);
+  padding:.4rem .4rem;display:none;max-height:260px;overflow:auto
+}
+.filter-dd.open .dd-menu{display:block}
+
+.dd-section{padding:.25rem .25rem .4rem}
+.dd-section h5{margin:.2rem .25rem .4rem;font-size:.8rem;color:#888;font-weight:600}
+.dd-empty{padding:.5rem .6rem;color:#888;font-size:.9rem}
+.dd-item{
+  display:grid;grid-template-columns:auto 1fr auto;align-items:center;
+  gap:.5rem;padding:.35rem .45rem;border-radius:8px
+}
+.dd-item:hover{background:transparent}
+.dd-item input{accent-color:#4a5568}
+.dd-count{font-variant-numeric:tabular-nums;color:#777}
+
+/* tablo + sayfalama */
+table{width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden}
+thead th{background:#fafafa}
+th,td{font-size:.95rem}
+#pager button{min-width:90px}
+
+.btn,
+.btn-outline,
+.btn-primary{
+  padding:.65rem 1.1rem;
+  border-radius:10px;
+  font-size:.95rem;
+  cursor:pointer;
+}
+.btn{
+  background-color:var(--accent);color:#fff;border:none;
+  transition:background .2s ease
+}
+.btn:hover{background-color:var(--accent-2)}
+
+.btn-outline{
+  background:transparent;
+  color:var(--ink);
+  border:1px solid var(--border);
+}
+.btn-outline:hover{background:#f6f7f9}
+
+.btn-primary{
+  background:var(--accent); color:#fff; border:1px solid var(--accent);
+}
+.btn-primary:hover{background:var(--accent-2)}
+
+/* dilekçe butonu taba daha “soft” görünsün */
+.btn-petition{padding:.45rem .7rem;border-radius:8px}
+
+/* modal */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.35);
+  display:none;align-items:center;justify-content:center;padding:1rem;
+}
+.modal-backdrop.open{display:flex}
+.modal{
+  width:min(880px, 96vw);max-height:90vh;
+  background:white;border-radius:16px;border:1px solid var(--border);
+  box-shadow:0 18px 50px rgba(0,0,0,.2);
+  display:flex;flex-direction:column;
+}
+.modal-close{
+  position:absolute;right:.75rem;top:.45rem;
+  background:transparent;border:none;font-size:1.6rem;cursor:pointer;color:#888
+}
+.modal h3{margin:1rem 1.25rem .25rem}
+.modal-body{
+  padding:.25rem 1.25rem 1rem;
+  display:flex;flex-direction:column;gap:.6rem;
+  overflow:auto;
+}
+.modal-preview{
+  border:1px solid var(--border);border-radius:12px;overflow:hidden;
+  background:#fafafa;min-height:300px;
+}
+.pdf-frame{
+  width:100%;height:420px;border:0;display:block;background:white
+}
+.pdf-loading{opacity:.6;filter:grayscale(1)}
+.modal-label{font-size:.9rem;color:#666}
+.modal-footer{
+  padding: .8rem 1.25rem .95rem;
+  display:flex;gap:.5rem;justify-content:flex-end;border-top:1px solid var(--border)
+}
+
+/* küçük bilgi satırları */
+.file-note{font-size:.9rem;color:var(--muted)}
+
+/* animasyonlar */
+@keyframes fadeInTop{
+  from{transform:translateY(-18px);opacity:0}
+  to{transform:translateY(0);opacity:1}
+}
+@keyframes fadeInUp{
+  from{transform:translateY(18px);opacity:0}
+  to{transform:translateY(0);opacity:1}
+}
+
+/* responsive */
+@media (max-width: 1024px){
+  .results-grid{grid-template-columns:1fr}
+  .filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width: 640px){
+  .backbar{margin:4.25rem auto .5rem}
+  .filter-grid{grid-template-columns:1fr}
+  #searchBox{font-size:.95rem}
+  .pdf-frame{height:360px}
+}
